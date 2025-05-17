@@ -241,7 +241,6 @@ const searchSymbols = vscode.commands.registerCommand(
           items.push({
             label: symbol,
             description: relativePath,
-            // Remove detail for single-line result
             alwaysShow: false,
             iconPath: new vscode.ThemeIcon(
               symbolTypeToIcon[search.type] || "symbol-misc"
@@ -269,12 +268,39 @@ const searchSymbols = vscode.commands.registerCommand(
       return;
     }
 
-    const quickPick = vscode.window.createQuickPick();
+    // Dynamically import Fuse.js for CommonJS compatibility
+    const Fuse = (await import("fuse.js")).default;
+    const fuse = new Fuse(items, {
+      includeScore: true,
+      keys: [
+        { name: "label", weight: 0.8 },
+        { name: "description", weight: 0.2 },
+      ],
+    });
 
-    quickPick.items = items;
-    quickPick.matchOnDescription = true;
-    quickPick.matchOnDetail = true;
-    quickPick.placeholder = "Search symbols...";
+    const MAX_ITEMS = 50;
+
+    const quickPick = vscode.window.createQuickPick();
+    quickPick.items = items.slice(0, MAX_ITEMS);
+    quickPick.matchOnDescription = false;
+    quickPick.matchOnDetail = false;
+    quickPick.placeholder = "Search symbols (fuzzy)";
+
+    quickPick.onDidChangeValue((value) => {
+      vscode.window.showInformationMessage(`Searching for ${value}`);
+      if (!value) {
+        quickPick.items = items.slice(0, MAX_ITEMS);
+        return;
+      }
+      const results = fuse.search(value, { limit: MAX_ITEMS });
+      quickPick.items = results.map((result) => {
+        // Retain all original fields
+        return {
+          ...result.item,
+          description: result.item.description,
+        };
+      });
+    });
 
     quickPick.onDidAccept(async () => {
       const selected = quickPick.selectedItems[0];
@@ -292,118 +318,6 @@ const searchSymbols = vscode.commands.registerCommand(
           new vscode.Range(pos, pos),
           vscode.TextEditorRevealType.InCenter
         );
-      }
-      quickPick.hide();
-    });
-
-    quickPick.show();
-  }
-);
-
-const testCustomQuickPick = vscode.commands.registerCommand(
-  "olly.testCustomQuickPick",
-  async () => {
-    // Dynamically import Fuse.js for CommonJS compatibility
-    const Fuse = (await import("fuse.js")).default;
-    // Fictitious, semi-long function/class/etc names (50 examples)
-    const ITEMS = [
-      "calculateUserEngagementScore",
-      "fetchRemoteConfigurationSettings",
-      "renderDashboardAnalyticsWidget",
-      "initializeDatabaseConnectionPool",
-      "handleUserAuthenticationCallback",
-      "generateMonthlySalesReportData",
-      "optimizeImageAssetPipeline",
-      "synchronizeCloudBackupService",
-      "validateEmailAddressFormat",
-      "registerNewUserAccountHandler",
-      "updateUserProfilePreferences",
-      "processPaymentGatewayResponse",
-      "scheduleRecurringMaintenanceTask",
-      "parseMarkdownToHtmlContent",
-      "resolveDependencyGraphConflicts",
-      "trackUserSessionActivityLog",
-      "sendPasswordResetNotification",
-      "archiveInactiveUserRecords",
-      "monitorServerHealthStatus",
-      "logApiRequestPerformanceMetrics",
-      "createTemporaryAccessToken",
-      "verifyUserTwoFactorCode",
-      "uploadUserProfilePicture",
-      "deleteObsoleteCacheEntries",
-      "dispatchOrderFulfillmentJob",
-      "extractTextFromPdfDocument",
-      "convertCsvToJsonFormat",
-      "mergePullRequestWithChecks",
-      "calculateShippingCostEstimate",
-      "generateInvoicePdfDocument",
-      "fetchWeatherForecastData",
-      "analyzeSentimentOfComments",
-      "resolveUserSupportTicket",
-      "applyDiscountCouponCode",
-      "refreshOAuthAccessToken",
-      "logUserConsentForTerms",
-      "schedulePushNotification",
-      "validateCreditCardNumber",
-      "generateQrCodeForEvent",
-      "summarizeUserActivityFeed",
-      "backupDatabaseToCloudStorage",
-      "restoreUserAccountFromBackup",
-      "detectDuplicateUserEntries",
-      "sanitizeUserInputFields",
-      "calculateCartTotalWithTax",
-      "fetchExchangeRateFromApi",
-      "renderUserAvatarComponent",
-      "updateInventoryStockLevel",
-      "sendOrderConfirmationEmail",
-      "trackShipmentDeliveryStatus",
-    ];
-
-    // Setup Fuse.js
-    const fuse = new Fuse(ITEMS, {
-      includeScore: true,
-      useExtendedSearch: true,
-    });
-
-    const itemToQuickPickItem = (item: string, score: number | null) => ({
-      label: item,
-      description: score ? `Score: ${score.toFixed(2)}` : undefined,
-    });
-
-    // Initial items
-    let items: vscode.QuickPickItem[] = ITEMS.slice(0, 10).map((name) =>
-      itemToQuickPickItem(name, null)
-    );
-
-    const quickPick = vscode.window.createQuickPick();
-    quickPick.items = items;
-    quickPick.matchOnDescription = false;
-    quickPick.matchOnDetail = false;
-    quickPick.placeholder = "Type to filter 2 (fuzzy Fuse.js)";
-
-    quickPick.onDidChangeValue((value) => {
-      if (!value) {
-        quickPick.items = ITEMS.slice(0, 10).map((name) =>
-          itemToQuickPickItem(name, null)
-        );
-        return;
-      }
-      const results = fuse.search(value, {
-        limit: 10,
-      });
-      const filtered = results.map((result) => {
-        const item = result.item;
-        const score = result.score ?? null;
-
-        return itemToQuickPickItem(item, score);
-      });
-      quickPick.items = filtered;
-    });
-
-    quickPick.onDidAccept(() => {
-      const selected = quickPick.selectedItems[0];
-      if (selected) {
-        vscode.window.showInformationMessage(`You picked: ${selected.label}`);
       }
       quickPick.hide();
     });
@@ -468,7 +382,6 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(swapToSibling);
   context.subscriptions.push(searchSymbols);
-  context.subscriptions.push(testCustomQuickPick);
 }
 
 export function deactivate() {}
