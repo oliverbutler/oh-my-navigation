@@ -127,7 +127,7 @@ const symbolTypeToIcon: Record<SymbolType, string> = {
   type: "symbol-namespace",
   interface: "symbol-interface",
   zod: "symbol-struct",
-  react: "symbol-constant",
+  react: "symbol-parameter",
   unknown: "symbol-misc",
 };
 
@@ -135,10 +135,11 @@ const symbolTypeToIcon: Record<SymbolType, string> = {
 function extractSymbol(line: string, regex: RegExp): string | null {
   const match = line.match(regex);
   if (!match) return null;
-  // Find the first non-keyword group
-  for (let i = 1; i < match.length; ++i) {
+  // Scan all groups, return the last one that is a valid identifier and not a keyword
+  for (let i = match.length - 1; i > 0; --i) {
     if (
       match[i] &&
+      /^[A-Za-z_][A-Za-z0-9_]*$/.test(match[i]) &&
       ![
         "const",
         "let",
