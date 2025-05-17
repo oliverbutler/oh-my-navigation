@@ -157,6 +157,22 @@ function extractSymbol(line: string, regex: RegExp): string | null {
   return null;
 }
 
+// Define a custom type for symbol items
+interface SymbolQuickPickItem extends vscode.QuickPickItem {
+  iconPath?: vscode.ThemeIcon;
+  file?: string;
+  line?: number;
+}
+
+// Custom tokenizer: split on case changes, spaces, hyphens, underscores, and dots
+function customTokenizer(str: string) {
+  // Split on spaces, hyphens, underscores, dots, and between lower/upper case
+  return str
+    .replace(/([a-z])([A-Z])/g, "$1 $2") // split camelCase
+    .split(/\s+|_|-|\.|\//) // split on space, underscore, hyphen, dot, slash
+    .filter(Boolean);
+}
+
 // Main searchSymbols command
 const searchSymbols = vscode.commands.registerCommand(
   "olly.searchSymbols",
@@ -268,50 +284,61 @@ const searchSymbols = vscode.commands.registerCommand(
       return;
     }
 
-    // Dynamically import Fuse.js for CommonJS compatibility
-    const Fuse = (await import("fuse.js")).default;
-    const fuse = new Fuse(items, {
-      includeScore: true,
-      keys: [
-        { name: "label", weight: 0.8 },
-        { name: "description", weight: 0.2 },
-      ],
-    });
+    // Prepare items for MiniSearch (no abbreviation, no iconPath/file/line in search fields)
+    const itemsForSearch: SymbolQuickPickItem[] = items.map((item, idx) => ({
+      id: idx, // MiniSearch requires a unique id
+      label: item.label,
+      description: item.description ?? "",
+      iconPath:
+        item.iconPath instanceof vscode.ThemeIcon ? item.iconPath : undefined,
+      file: (item as any).file as string | undefined,
+      line: (item as any).line as number | undefined,
+    }));
 
-    const MAX_ITEMS = 50;
+    // Import MiniSearch
+    const MiniSearch = (await import("minisearch")).default;
+    const miniSearch = new MiniSearch({
+      fields: ["label", "description"], // only search by label and description
+      storeFields: ["label", "description", "iconPath", "file", "line"],
+      tokenize: customTokenizer,
+      searchOptions: {
+        boost: { label: 2, description: 1 },
+        fuzzy: 0.5,
+      },
+    });
+    miniSearch.addAll(itemsForSearch);
 
     const quickPick = vscode.window.createQuickPick();
-    quickPick.items = items.slice(0, MAX_ITEMS);
+    quickPick.items = itemsForSearch.slice(0, 50);
     quickPick.matchOnDescription = false;
     quickPick.matchOnDetail = false;
-    quickPick.placeholder = "Search symbols (fuzzy)";
+    quickPick.placeholder = "Search symbols (MiniSearch)";
 
     quickPick.onDidChangeValue((value) => {
-      vscode.window.showInformationMessage(`Searching for ${value}`);
       if (!value) {
-        quickPick.items = items.slice(0, MAX_ITEMS);
+        quickPick.items = itemsForSearch.slice(0, 50);
         return;
       }
-      const results = fuse.search(value, { limit: MAX_ITEMS });
-      quickPick.items = results.map((result) => {
-        // Retain all original fields
-        return {
-          ...result.item,
-          description: result.item.description,
-        };
-      });
+      const results = miniSearch.search(value, { prefix: true, fuzzy: 0.3 });
+      quickPick.items = results.slice(0, 50).map((result: any) => ({
+        label: result.label,
+        description: result.description,
+        iconPath: result.iconPath,
+        file: result.file,
+        line: result.line,
+      }));
     });
 
     quickPick.onDidAccept(async () => {
-      const selected = quickPick.selectedItems[0];
+      const selected = quickPick.selectedItems[0] as SymbolQuickPickItem;
       if (selected) {
         const fileUri = vscode.Uri.file(
-          path.join(rootPath, (selected as any).description)
+          path.join(rootPath, selected.description ?? "")
         );
         const doc = await vscode.workspace.openTextDocument(fileUri);
         const editor = await vscode.window.showTextDocument(doc);
         // Reveal the line
-        const line = (selected as any).line - 1;
+        const line = (selected.line ?? 1) - 1;
         const pos = new vscode.Position(line, 0);
         editor.selection = new vscode.Selection(pos, pos);
         editor.revealRange(
