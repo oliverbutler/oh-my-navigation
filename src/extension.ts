@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as child_process from "child_process";
 import * as path from "path";
 
 type SymbolType =
@@ -164,15 +163,6 @@ interface SymbolQuickPickItem extends vscode.QuickPickItem {
   line?: number;
 }
 
-// Custom tokenizer: split on case changes, spaces, hyphens, underscores, and dots
-function customTokenizer(str: string) {
-  // Split on spaces, hyphens, underscores, dots, and between lower/upper case
-  return str
-    .replace(/([a-z])([A-Z])/g, "$1 $2") // split camelCase
-    .split(/\s+|_|-|\.|\//) // split on space, underscore, hyphen, dot, slash
-    .filter(Boolean);
-}
-
 // Main searchSymbols command
 const searchSymbols = vscode.commands.registerCommand(
   "olly.searchSymbols",
@@ -284,9 +274,8 @@ const searchSymbols = vscode.commands.registerCommand(
       return;
     }
 
-    // Prepare items for MiniSearch (no abbreviation, no iconPath/file/line in search fields)
-    const itemsForSearch: SymbolQuickPickItem[] = items.map((item, idx) => ({
-      id: idx, // MiniSearch requires a unique id
+    // Prepare items for FZF
+    const itemsForSearch: SymbolQuickPickItem[] = items.map((item) => ({
       label: item.label,
       description: item.description ?? "",
       iconPath:
@@ -294,39 +283,41 @@ const searchSymbols = vscode.commands.registerCommand(
       file: (item as any).file as string | undefined,
       line: (item as any).line as number | undefined,
     }));
+    // Import FZF for JavaScript using require for better compatibility
+    // @ts-ignore
+    const { Fzf } = require("fzf");
 
-    // Import MiniSearch
-    const MiniSearch = (await import("minisearch")).default;
-    const miniSearch = new MiniSearch({
-      fields: ["label", "description"], // only search by label and description
-      storeFields: ["label", "description", "iconPath", "file", "line"],
-      tokenize: customTokenizer,
-      searchOptions: {
-        boost: { label: 2, description: 1 },
-        fuzzy: 0.5,
-      },
+    // Create new FZF instance
+    // @ts-ignore
+    const fzf = new Fzf(itemsForSearch, {
+      // Tell FZF to use 'label' and 'description' fields for matching
+      selector: (item: SymbolQuickPickItem) =>
+        `${item.label} ${item.description ?? ""}`,
+      // Match anywhere in the string, not just at the beginning
+      match: { anywhere: true },
+      // Sort by score
+      tiebreakers: ["score", "index"],
     });
-    miniSearch.addAll(itemsForSearch);
 
     const quickPick = vscode.window.createQuickPick();
     quickPick.items = itemsForSearch.slice(0, 50);
     quickPick.matchOnDescription = false;
     quickPick.matchOnDetail = false;
-    quickPick.placeholder = "Search symbols (MiniSearch)";
+    quickPick.placeholder = "Search symbols (FZF)";
 
     quickPick.onDidChangeValue((value) => {
       if (!value) {
         quickPick.items = itemsForSearch.slice(0, 50);
         return;
       }
-      const results = miniSearch.search(value, { prefix: true, fuzzy: 0.3 });
-      quickPick.items = results.slice(0, 50).map((result: any) => ({
-        label: result.label,
-        description: result.description,
-        iconPath: result.iconPath,
-        file: result.file,
-        line: result.line,
-      }));
+
+      // Use FZF to find matches
+      const results = fzf.find(value);
+
+      // Get the top 50 results
+      quickPick.items = results
+        .slice(0, 50)
+        .map((result: { item: SymbolQuickPickItem }) => result.item);
     });
 
     quickPick.onDidAccept(async () => {
