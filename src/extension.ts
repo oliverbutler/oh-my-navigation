@@ -132,7 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
           // Skip detail field for more compact display
           // Preserve data for navigation
           alwaysShow: false,
-          iconPath: new vscode.ThemeIcon(getFileIcon(file)),
+          iconPath: new vscode.ThemeIcon("symbol-function"),
           // @ts-ignore - custom properties
           file,
           // @ts-ignore
@@ -180,12 +180,3 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
-
-// Helper function to get appropriate file icon
-function getFileIcon(filePath: string): string {
-  if (filePath.endsWith(".tsx")) return "symbol-typescript";
-  if (filePath.endsWith(".jsx")) return "symbol-javascript";
-  if (filePath.endsWith(".ts")) return "symbol-typescript";
-  if (filePath.endsWith(".js")) return "symbol-javascript";
-  return "symbol-file";
-}
