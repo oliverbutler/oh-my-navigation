@@ -299,6 +299,24 @@ const searchSymbols = vscode.commands.registerCommand(
     quickPick.matchOnDetail = false;
     quickPick.placeholder = "Search symbols (FZF)";
 
+    // Store original editor state to return to if canceled
+    const originalEditor = vscode.window.activeTextEditor;
+    let lastSelectedItem: SymbolQuickPickItem | undefined;
+    let previewEditor: vscode.TextEditor | undefined;
+    let isPreviewingFile = false;
+
+    // Track if quickPick is active
+    let quickPickActive = true;
+
+    // Set focus back to quick pick when editor changes
+    const editorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(
+      () => {
+        if (quickPickActive) {
+          quickPick.show();
+        }
+      }
+    );
+
     quickPick.onDidChangeValue((value) => {
       if (!value) {
         quickPick.items = itemsForSearch.slice(0, 50);
@@ -311,6 +329,48 @@ const searchSymbols = vscode.commands.registerCommand(
       quickPick.items = results.map((result) => result.item);
     });
 
+    // Preview the selected file when navigating
+    quickPick.onDidChangeActive(async (items) => {
+      const selected = items[0] as SymbolQuickPickItem;
+      if (
+        selected &&
+        selected !== lastSelectedItem &&
+        selected.description &&
+        !isPreviewingFile
+      ) {
+        lastSelectedItem = selected;
+        isPreviewingFile = true;
+
+        try {
+          const fileUri = vscode.Uri.file(
+            path.join(rootPath, selected.description)
+          );
+
+          const doc = await vscode.workspace.openTextDocument(fileUri);
+          previewEditor = await vscode.window.showTextDocument(doc, {
+            preview: true,
+            preserveFocus: true, // Keep focus on the quickPick
+          });
+
+          // Reveal the line
+          const line = (selected.line ?? 1) - 1;
+          const pos = new vscode.Position(line, 0);
+          previewEditor.selection = new vscode.Selection(pos, pos);
+          previewEditor.revealRange(
+            new vscode.Range(pos, pos),
+            vscode.TextEditorRevealType.InCenter
+          );
+        } catch (err) {
+          console.error("Failed to preview file:", err);
+        } finally {
+          // Reset preview flag after a short delay
+          setTimeout(() => {
+            isPreviewingFile = false;
+          }, 200);
+        }
+      }
+    });
+
     quickPick.onDidAccept(async () => {
       const selected = quickPick.selectedItems[0] as SymbolQuickPickItem;
       if (selected) {
@@ -318,17 +378,43 @@ const searchSymbols = vscode.commands.registerCommand(
           path.join(rootPath, selected.description ?? "")
         );
         const doc = await vscode.workspace.openTextDocument(fileUri);
-        const editor = await vscode.window.showTextDocument(doc);
+        await vscode.window.showTextDocument(doc, { preview: false });
         // Reveal the line
         const line = (selected.line ?? 1) - 1;
         const pos = new vscode.Position(line, 0);
-        editor.selection = new vscode.Selection(pos, pos);
-        editor.revealRange(
-          new vscode.Range(pos, pos),
-          vscode.TextEditorRevealType.InCenter
-        );
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+          editor.selection = new vscode.Selection(pos, pos);
+          editor.revealRange(
+            new vscode.Range(pos, pos),
+            vscode.TextEditorRevealType.InCenter
+          );
+        }
       }
+
+      // Clean up the disposable
+      editorChangeDisposable.dispose();
       quickPick.hide();
+    });
+
+    quickPick.onDidHide(() => {
+      quickPickActive = false;
+
+      // Clean up the disposable
+      editorChangeDisposable.dispose();
+
+      // If we didn't accept a selection and have an original editor, go back to it
+      if (
+        originalEditor &&
+        previewEditor &&
+        previewEditor === vscode.window.activeTextEditor
+      ) {
+        vscode.window.showTextDocument(originalEditor.document, {
+          viewColumn: originalEditor.viewColumn,
+          selection: originalEditor.selection,
+          preview: false,
+        });
+      }
     });
 
     quickPick.show();
