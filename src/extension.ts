@@ -119,22 +119,21 @@ export function activate(context: vscode.ExtensionContext) {
         const [, file, lineNum, colNum, code] = match;
         // Try to extract component name
         const nameMatch = code.match(/\b([A-Z][a-zA-Z0-9]*)\b/);
-        const labelBase = nameMatch ? nameMatch[1] : "(unknown)";
-        // Icon based on file extension
-        let icon = "";
-        if (file.endsWith(".tsx")) icon = "📘 ";
-        else if (file.endsWith(".jsx")) icon = "📗 ";
-        else if (file.endsWith(".js")) icon = "📙 ";
-        else if (file.endsWith(".ts")) icon = "📒 ";
-        const label = icon + labelBase;
-        // Show absolute path from repo root
-        const absPath = file;
+        const componentName = nameMatch ? nameMatch[1] : "(unknown)";
+
+        // Get relative path from workspace root
+        const relativePath = file.startsWith(rootPath)
+          ? file.substring(rootPath.length + 1)
+          : file;
+
         items.push({
-          label,
-          description: absPath,
-          detail: `Line ${lineNum}: ${code.trim()}`,
-          alwaysShow: true,
-          // @ts-ignore
+          label: componentName,
+          description: relativePath,
+          // Skip detail field for more compact display
+          // Preserve data for navigation
+          alwaysShow: false,
+          iconPath: new vscode.ThemeIcon(getFileIcon(file)),
+          // @ts-ignore - custom properties
           file,
           // @ts-ignore
           line: Number(lineNum),
@@ -181,3 +180,12 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+// Helper function to get appropriate file icon
+function getFileIcon(filePath: string): string {
+  if (filePath.endsWith(".tsx")) return "symbol-typescript";
+  if (filePath.endsWith(".jsx")) return "symbol-javascript";
+  if (filePath.endsWith(".ts")) return "symbol-typescript";
+  if (filePath.endsWith(".js")) return "symbol-javascript";
+  return "symbol-file";
+}
