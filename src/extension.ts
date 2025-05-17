@@ -174,6 +174,22 @@ const searchSymbols = vscode.commands.registerCommand(
     }
     const rootPath = workspaceFolders[0].uri.fsPath;
 
+    // Save original editor state
+    const originalEditor = vscode.window.activeTextEditor;
+
+    // Enable proper preview mode to prevent navigation history pollution
+    // Save original setting value
+    const originalPreviewSetting = vscode.workspace
+      .getConfiguration("workbench.editor")
+      .get("enablePreviewFromQuickOpen");
+    await vscode.workspace
+      .getConfiguration("workbench.editor")
+      .update(
+        "enablePreviewFromQuickOpen",
+        true,
+        vscode.ConfigurationTarget.Global
+      );
+
     // Ask user for symbol type
     const symbolTypes = [
       { label: "All", value: "all" },
@@ -299,14 +315,10 @@ const searchSymbols = vscode.commands.registerCommand(
     quickPick.matchOnDetail = false;
     quickPick.placeholder = "Search symbols (FZF)";
 
-    // Store original editor state to return to if canceled
-    const originalEditor = vscode.window.activeTextEditor;
-    let lastSelectedItem: SymbolQuickPickItem | undefined;
-    let previewEditor: vscode.TextEditor | undefined;
-    let isPreviewingFile = false;
-
     // Track if quickPick is active
     let quickPickActive = true;
+    let lastSelectedItem: SymbolQuickPickItem | undefined;
+    let isPreviewingFile = false;
 
     // Set focus back to quick pick when editor changes
     const editorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(
@@ -347,7 +359,16 @@ const searchSymbols = vscode.commands.registerCommand(
           );
 
           const doc = await vscode.workspace.openTextDocument(fileUri);
-          previewEditor = await vscode.window.showTextDocument(doc, {
+
+          // Using a special trick to avoid navigation history:
+          // 1. First get the active editor's viewColumn
+          const currentViewColumn =
+            vscode.window.activeTextEditor?.viewColumn ||
+            vscode.ViewColumn.Active;
+
+          // 2. Open the document with preview mode and preserveFocus
+          const previewEditor = await vscode.window.showTextDocument(doc, {
+            viewColumn: currentViewColumn,
             preview: true,
             preserveFocus: true, // Keep focus on the quickPick
           });
@@ -397,18 +418,24 @@ const searchSymbols = vscode.commands.registerCommand(
       quickPick.hide();
     });
 
-    quickPick.onDidHide(() => {
+    // Clean up when done
+    quickPick.onDidHide(async () => {
       quickPickActive = false;
 
       // Clean up the disposable
       editorChangeDisposable.dispose();
 
+      // Restore original setting
+      await vscode.workspace
+        .getConfiguration("workbench.editor")
+        .update(
+          "enablePreviewFromQuickOpen",
+          originalPreviewSetting,
+          vscode.ConfigurationTarget.Global
+        );
+
       // If we didn't accept a selection and have an original editor, go back to it
-      if (
-        originalEditor &&
-        previewEditor &&
-        previewEditor === vscode.window.activeTextEditor
-      ) {
+      if (originalEditor && originalEditor.document) {
         vscode.window.showTextDocument(originalEditor.document, {
           viewColumn: originalEditor.viewColumn,
           selection: originalEditor.selection,
