@@ -2,7 +2,7 @@
   "name": "olly",
   "displayName": "olly",
   "description": "custom extension to make my editor better",
-  "version": "0.0.2",
+  "version": "0.0.1",
   "license": "MIT",
   "engines": {
     "vscode": "^1.96.0"
@@ -16,6 +16,7 @@
   },
   "activationEvents": [],
   "main": "./dist/extension.js",
+  "publisher": "olly",
   "contributes": {
     "commands": [
       {
@@ -25,11 +26,15 @@
       {
         "command": "olly.searchSymbols",
         "title": "Olly: Search Symbols"
+      },
+      {
+        "command": "olly.testCustomQuickPick",
+        "title": "Olly: Test Custom Quick Pick"
       }
     ]
   },
   "scripts": {
-    "build-install": "vsce package && cursor --install-extension *.vsix --force",
+    "build-install": "vsce package --no-dependencies && cursor --install-extension *.vsix --force",
     "vscode:prepublish": "pnpm run package",
     "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
     "watch": "npm-run-all -p watch:*",
@@ -56,5 +61,7 @@
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3"
   },
-  "dependencies": {}
+  "dependencies": {
+    "fuse.js": "^7.1.0"
+  }
 }
