@@ -42,6 +42,53 @@ async function runRipgrep(
   }
 }
 
+// Custom scheme for file previews
+const PREVIEW_SCHEME = "symbol-preview";
+
+// ContentProvider for efficient file previews without triggering LSP
+class SymbolPreviewContentProvider
+  implements vscode.TextDocumentContentProvider
+{
+  private readonly _onDidChange = new vscode.EventEmitter<vscode.Uri>();
+  readonly onDidChange = this._onDidChange.event;
+  private fileContents = new Map<string, string>();
+
+  constructor() {}
+
+  async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+    // Parse URI parameters
+    const params = new URLSearchParams(uri.query);
+    const filePath = params.get("path") || "";
+    const line = parseInt(params.get("line") || "1", 10);
+
+    // Check cache first
+    if (this.fileContents.has(filePath)) {
+      return this.fileContents.get(filePath) || "";
+    }
+
+    try {
+      const fs = require("fs");
+      const content = fs.readFileSync(filePath, "utf8");
+      this.fileContents.set(filePath, content);
+      return content;
+    } catch (err) {
+      return `Error loading preview: ${err}`;
+    }
+  }
+
+  // Clear cache when no longer needed
+  clearCache(filePath?: string) {
+    if (filePath) {
+      this.fileContents.delete(filePath);
+    } else {
+      this.fileContents.clear();
+    }
+  }
+}
+
+// Create a singleton preview provider that can be accessed from everywhere
+const previewProvider = new SymbolPreviewContentProvider();
+
 // Symbol patterns for JS/TS/Go
 const symbolPatterns: Record<
   string,
@@ -174,6 +221,22 @@ const searchSymbols = vscode.commands.registerCommand(
     }
     const rootPath = workspaceFolders[0].uri.fsPath;
 
+    // Save original editor state
+    const originalEditor = vscode.window.activeTextEditor;
+
+    // Enable proper preview mode to prevent navigation history pollution
+    // Save original setting value
+    const originalPreviewSetting = vscode.workspace
+      .getConfiguration("workbench.editor")
+      .get("enablePreviewFromQuickOpen");
+    await vscode.workspace
+      .getConfiguration("workbench.editor")
+      .update(
+        "enablePreviewFromQuickOpen",
+        true,
+        vscode.ConfigurationTarget.Global
+      );
+
     // Ask user for symbol type
     const symbolTypes = [
       { label: "All", value: "all" },
@@ -300,7 +363,6 @@ const searchSymbols = vscode.commands.registerCommand(
     quickPick.placeholder = "Search symbols (FZF)";
 
     // Store original editor state to return to if canceled
-    const originalEditor = vscode.window.activeTextEditor;
     let lastSelectedItem: SymbolQuickPickItem | undefined;
     let previewEditor: vscode.TextEditor | undefined;
     let isPreviewingFile = false;
@@ -342,24 +404,46 @@ const searchSymbols = vscode.commands.registerCommand(
         isPreviewingFile = true;
 
         try {
-          const fileUri = vscode.Uri.file(
-            path.join(rootPath, selected.description)
+          const filePath = path.join(rootPath, selected.description);
+          const line = selected.line || 1;
+
+          // Create a URI with our custom scheme
+          const previewUri = vscode.Uri.parse(
+            `${PREVIEW_SCHEME}:Symbol Preview?path=${encodeURIComponent(
+              filePath
+            )}&line=${line}`
           );
 
-          const doc = await vscode.workspace.openTextDocument(fileUri);
-          previewEditor = await vscode.window.showTextDocument(doc, {
+          // Open with our lightweight preview provider
+          const doc = await vscode.workspace.openTextDocument(previewUri);
+          const previewEditor = await vscode.window.showTextDocument(doc, {
+            viewColumn: vscode.ViewColumn.Active,
             preview: true,
             preserveFocus: true, // Keep focus on the quickPick
           });
 
-          // Reveal the line
-          const line = (selected.line ?? 1) - 1;
-          const pos = new vscode.Position(line, 0);
-          previewEditor.selection = new vscode.Selection(pos, pos);
+          // Highlight the line
+          const linePosition = line - 1;
+          const range = new vscode.Range(linePosition, 0, linePosition, 0);
+          previewEditor.selection = new vscode.Selection(
+            linePosition,
+            0,
+            linePosition,
+            0
+          );
           previewEditor.revealRange(
-            new vscode.Range(pos, pos),
+            range,
             vscode.TextEditorRevealType.InCenter
           );
+
+          // Add decoration to highlight the line
+          const decoration = vscode.window.createTextEditorDecorationType({
+            backgroundColor: new vscode.ThemeColor(
+              "editor.findMatchHighlightBackground"
+            ),
+            isWholeLine: true,
+          });
+          previewEditor.setDecorations(decoration, [range]);
         } catch (err) {
           console.error("Failed to preview file:", err);
         } finally {
@@ -374,23 +458,39 @@ const searchSymbols = vscode.commands.registerCommand(
     quickPick.onDidAccept(async () => {
       const selected = quickPick.selectedItems[0] as SymbolQuickPickItem;
       if (selected) {
+        // Close the preview first
+        if (
+          vscode.window.activeTextEditor &&
+          vscode.window.activeTextEditor.document.uri.scheme === PREVIEW_SCHEME
+        ) {
+          // Close any open preview editors
+          await vscode.commands.executeCommand(
+            "workbench.action.closeActiveEditor"
+          );
+        }
+
+        // Open the actual file (not in preview mode)
         const fileUri = vscode.Uri.file(
           path.join(rootPath, selected.description ?? "")
         );
         const doc = await vscode.workspace.openTextDocument(fileUri);
-        await vscode.window.showTextDocument(doc, { preview: false });
+        const editor = await vscode.window.showTextDocument(doc, {
+          preview: false,
+          viewColumn: vscode.ViewColumn.Active, // Open in the active column
+        });
+
         // Reveal the line
         const line = (selected.line ?? 1) - 1;
         const pos = new vscode.Position(line, 0);
-        const editor = vscode.window.activeTextEditor;
-        if (editor) {
-          editor.selection = new vscode.Selection(pos, pos);
-          editor.revealRange(
-            new vscode.Range(pos, pos),
-            vscode.TextEditorRevealType.InCenter
-          );
-        }
+        editor.selection = new vscode.Selection(pos, pos);
+        editor.revealRange(
+          new vscode.Range(pos, pos),
+          vscode.TextEditorRevealType.InCenter
+        );
       }
+
+      // Clear the preview cache
+      previewProvider.clearCache();
 
       // Clean up the disposable
       editorChangeDisposable.dispose();
@@ -403,12 +503,17 @@ const searchSymbols = vscode.commands.registerCommand(
       // Clean up the disposable
       editorChangeDisposable.dispose();
 
+      // Restore original setting
+      vscode.workspace
+        .getConfiguration("workbench.editor")
+        .update(
+          "enablePreviewFromQuickOpen",
+          originalPreviewSetting,
+          vscode.ConfigurationTarget.Global
+        );
+
       // If we didn't accept a selection and have an original editor, go back to it
-      if (
-        originalEditor &&
-        previewEditor &&
-        previewEditor === vscode.window.activeTextEditor
-      ) {
+      if (originalEditor && originalEditor.document) {
         vscode.window.showTextDocument(originalEditor.document, {
           viewColumn: originalEditor.viewColumn,
           selection: originalEditor.selection,
@@ -422,6 +527,14 @@ const searchSymbols = vscode.commands.registerCommand(
 );
 
 export function activate(context: vscode.ExtensionContext) {
+  // Register the content provider for symbol previews
+  const providerRegistration =
+    vscode.workspace.registerTextDocumentContentProvider(
+      PREVIEW_SCHEME,
+      previewProvider
+    );
+  context.subscriptions.push(providerRegistration);
+
   const swapToSibling = vscode.commands.registerCommand(
     "olly.swapToSibling",
     async () => {
