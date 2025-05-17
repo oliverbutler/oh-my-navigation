@@ -283,20 +283,14 @@ const searchSymbols = vscode.commands.registerCommand(
       file: (item as any).file as string | undefined,
       line: (item as any).line as number | undefined,
     }));
-    // Import FZF for JavaScript using require for better compatibility
-    // @ts-ignore
-    const { Fzf } = require("fzf");
 
-    // Create new FZF instance
-    // @ts-ignore
+    const { Fzf } = await import("fzf");
+
+    // Create FZF instance correctly
     const fzf = new Fzf(itemsForSearch, {
-      // Tell FZF to use 'label' and 'description' fields for matching
-      selector: (item: SymbolQuickPickItem) =>
-        `${item.label} ${item.description ?? ""}`,
-      // Match anywhere in the string, not just at the beginning
-      match: { anywhere: true },
-      // Sort by score
-      tiebreakers: ["score", "index"],
+      selector: (item) => item.label,
+      casing: "smart-case",
+      limit: 50,
     });
 
     const quickPick = vscode.window.createQuickPick();
@@ -314,10 +308,7 @@ const searchSymbols = vscode.commands.registerCommand(
       // Use FZF to find matches
       const results = fzf.find(value);
 
-      // Get the top 50 results
-      quickPick.items = results
-        .slice(0, 50)
-        .map((result: { item: SymbolQuickPickItem }) => result.item);
+      quickPick.items = results.map((result) => result.item);
     });
 
     quickPick.onDidAccept(async () => {
