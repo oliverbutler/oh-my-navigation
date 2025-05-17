@@ -25,6 +25,10 @@
       {
         "command": "olly.searchReactComponent",
         "title": "Olly: Search React Component"
+      },
+      {
+        "command": "olly.searchSymbols",
+        "title": "Olly: Search Symbols"
       }
     ]
   },
