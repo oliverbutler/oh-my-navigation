@@ -79,7 +79,7 @@ const searchSymbols = vscode.commands.registerCommand(
     ];
     quickPick.matchOnDescription = false;
     quickPick.matchOnDetail = false;
-    quickPick.placeholder = "Search symbols (FZF)";
+    quickPick.placeholder = "Search symbols";
     quickPick.busy = true;
     quickPick.show();
 
