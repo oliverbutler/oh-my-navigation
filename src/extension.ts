@@ -4,6 +4,7 @@ import { RecencyTracker } from "./utils/recencyTracker";
 import { registerSearchSymbolsCommand } from "./commands/searchSymbols";
 import { registerSwapToSiblingCommand } from "./commands/swapToSibling";
 import { registerGoToReferencesCommand } from "./commands/goToReferences";
+import { registerRipgrepSearchCommand } from "./commands/ripgrepSearch";
 
 let recencyTracker: RecencyTracker;
 
@@ -19,6 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
   registerSearchSymbolsCommand(context, recencyTracker, outputChannel);
   registerSwapToSiblingCommand(context);
   registerGoToReferencesCommand(context, recencyTracker, outputChannel);
+  registerRipgrepSearchCommand(context, recencyTracker, outputChannel);
 
   const showLogs = vscode.commands.registerCommand("olly.showLogs", () => {
     outputChannel.show();

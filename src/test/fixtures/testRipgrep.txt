@@ -1,0 +1,14 @@
+This is a test file for ripgrep searching.
+
+It contains several test words that we can search for:
+- TestWord1
+- TestWord2 
+- SomeOtherWord
+
+We can also search for phrases like "this is a test file".
+
+Sometimes testword1 appears with different casing.
+
+Even special characters like C++ and Node.js should work.
+
+The end of the test file. 

@@ -44,6 +44,10 @@
         "title": "Olly: Go to Type Definition"
       },
       {
+        "command": "olly.ripgrepSearch",
+        "title": "Olly: Ripgrep Search Word Under Cursor"
+      },
+      {
         "command": "olly.clearRecencyData",
         "title": "Olly: Clear Recency Data"
       },
