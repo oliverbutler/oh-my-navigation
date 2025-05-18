@@ -26,10 +26,6 @@
       {
         "command": "olly.searchSymbols",
         "title": "Olly: Search Symbols"
-      },
-      {
-        "command": "olly.testCustomQuickPick",
-        "title": "Olly: Test Custom Quick Pick"
       }
     ]
   },
