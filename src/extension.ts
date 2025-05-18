@@ -11,12 +11,14 @@ import {
   previewProvider,
   getSymbolPreviewUri,
 } from "./symbolPreview";
+import { RecencyTracker, SymbolScore } from "./recencyTracker";
 
 // Define a custom type for symbol items
 interface SymbolQuickPickItem extends vscode.QuickPickItem {
   iconPath?: vscode.ThemeIcon;
   file?: string;
   line?: number;
+  score?: number;
 }
 
 // Stale-while-revalidate cache for symbol search results
@@ -26,6 +28,9 @@ const symbolCache: Record<string, SymbolQuickPickItem[]> = {};
 function getCacheKey(type: string, rootPath: string) {
   return `${type}::${rootPath}`;
 }
+
+// Global recency tracker instance
+let recencyTracker: RecencyTracker;
 
 // Main searchSymbols command
 const searchSymbols = vscode.commands.registerCommand(
@@ -80,8 +85,36 @@ const searchSymbols = vscode.commands.registerCommand(
     const cacheKey = getCacheKey(picked.value, rootPath);
     let itemsForSearch: SymbolQuickPickItem[] = [];
     if (symbolCache[cacheKey]) {
-      // Sort deterministically: by label, then description, then line
-      itemsForSearch = [...symbolCache[cacheKey]].sort((a, b) => {
+      // Use cached results and enrich with recency scores
+      itemsForSearch = [...symbolCache[cacheKey]];
+
+      // Get recency scores for all items
+      const scoreItems = itemsForSearch.map((item) => ({
+        filePath: item.file!,
+        symbolName: item.label,
+      }));
+
+      const scores = await recencyTracker.getScores(scoreItems);
+
+      // Apply scores to items
+      for (const item of itemsForSearch) {
+        const key = `${item.file}#${item.label}`;
+        const score = scores.get(key);
+        if (score) {
+          item.score = score.score;
+          // Update detail to show the score
+          item.detail = score.score > 0 ? `Score: ${score.score}` : undefined;
+        }
+      }
+
+      // Sort by score (highest first), then alphabetically
+      itemsForSearch.sort((a, b) => {
+        // Score sorting (descending)
+        const scoreA = a.score || 0;
+        const scoreB = b.score || 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+
+        // Fallback to alphabetical sorting
         if (a.label !== b.label) return a.label.localeCompare(b.label);
         if ((a.description || "") !== (b.description || ""))
           return (a.description || "").localeCompare(b.description || "");
@@ -146,6 +179,8 @@ const searchSymbols = vscode.commands.registerCommand(
           );
           return;
         }
+
+        // Create fresh items and enrich with recency scores
         const freshItems: SymbolQuickPickItem[] = symbols.map((item) => {
           const relativePath = item.file.startsWith(rootPath)
             ? item.file.substring(rootPath.length + 1)
@@ -158,20 +193,49 @@ const searchSymbols = vscode.commands.registerCommand(
             line: item.line,
           };
         });
-        // Sort deterministically
+
+        // Get recency scores for all items
+        const scoreItems = freshItems.map((item) => ({
+          filePath: item.file!,
+          symbolName: item.label,
+        }));
+
+        const scores = await recencyTracker.getScores(scoreItems);
+
+        // Apply scores to items
+        for (const item of freshItems) {
+          const key = `${item.file}#${item.label}`;
+          const score = scores.get(key);
+          if (score) {
+            item.score = score.score;
+            // Update detail to show the score
+            item.detail = score.score > 0 ? `Score: ${score.score}` : undefined;
+          }
+        }
+
+        // Sort by score (highest first), then alphabetically
         freshItems.sort((a, b) => {
+          // Score sorting (descending)
+          const scoreA = a.score || 0;
+          const scoreB = b.score || 0;
+          if (scoreB !== scoreA) return scoreB - scoreA;
+
+          // Fallback to alphabetical sorting
           if (a.label !== b.label) return a.label.localeCompare(b.label);
           if ((a.description || "") !== (b.description || ""))
             return (a.description || "").localeCompare(b.description || "");
           return (a.line || 0) - (b.line || 0);
         });
+
         symbolCache[cacheKey] = freshItems;
         itemsForSearch = freshItems;
+
         // Update FZF instance and quickPick items if quickPick is still open
         if (!quickPick.busy) return; // If user already accepted/canceled, skip
         fzf = new Fzf(itemsForSearch, {
           selector: (item) => item.label,
           casing: "smart-case",
+          sort: true,
           limit: 50,
         });
         quickPick.items = freshItems.slice(0, 50);
@@ -293,6 +357,11 @@ const searchSymbols = vscode.commands.registerCommand(
           );
         }
 
+        // Record this access in recency tracker
+        if (selected.file && selected.label) {
+          await recencyTracker.recordAccess(selected.file, selected.label);
+        }
+
         // Open the actual file (not in preview mode)
         const fileUri = vscode.Uri.file(
           path.join(rootPath, selected.description ?? "")
@@ -358,6 +427,9 @@ const searchSymbols = vscode.commands.registerCommand(
 );
 
 export function activate(context: vscode.ExtensionContext) {
+  // Initialize recency tracker
+  recencyTracker = new RecencyTracker(context);
+
   const swapToSibling = vscode.commands.registerCommand(
     "olly.swapToSibling",
     async () => {
@@ -419,8 +491,18 @@ export function activate(context: vscode.ExtensionContext) {
     );
   context.subscriptions.push(providerRegistration);
 
+  // Add command to clear recency data
+  const clearRecencyData = vscode.commands.registerCommand(
+    "olly.clearRecencyData",
+    async () => {
+      await recencyTracker.clear();
+      vscode.window.showInformationMessage("Recency data cleared");
+    }
+  );
+
   context.subscriptions.push(swapToSibling);
   context.subscriptions.push(searchSymbols);
+  context.subscriptions.push(clearRecencyData);
 }
 
 export function deactivate() {}

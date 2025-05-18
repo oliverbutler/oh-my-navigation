@@ -26,6 +26,10 @@
       {
         "command": "olly.searchSymbols",
         "title": "Olly: Search Symbols"
+      },
+      {
+        "command": "olly.clearRecencyData",
+        "title": "Olly: Clear Recency Data"
       }
     ]
   },
