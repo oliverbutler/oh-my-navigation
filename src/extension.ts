@@ -68,11 +68,33 @@ const searchSymbols = vscode.commands.registerCommand(
     }
     if (!picked) return;
 
-    // Find all symbols using the extracted function
+    // Create the quick pick UI immediately (empty, with loading message)
+    const quickPick = vscode.window.createQuickPick<SymbolQuickPickItem>();
+    quickPick.items = [
+      {
+        label: "$(sync~spin) Loading symbols...",
+        description: "",
+        alwaysShow: true,
+      },
+    ];
+    quickPick.matchOnDescription = false;
+    quickPick.matchOnDetail = false;
+    quickPick.placeholder = "Search symbols (FZF)";
+    quickPick.busy = true;
+    quickPick.show();
+
+    // Find all symbols using the extracted function (async, after quickPick is shown)
     const symbols = await findSymbols(picked.value, rootPath);
 
     if (symbols.length === 0) {
-      vscode.window.showInformationMessage("No symbols found.");
+      quickPick.items = [
+        {
+          label: "No symbols found.",
+          description: "",
+          alwaysShow: true,
+        },
+      ];
+      quickPick.busy = false;
       return;
     }
 
@@ -100,11 +122,9 @@ const searchSymbols = vscode.commands.registerCommand(
       limit: 50,
     });
 
-    const quickPick = vscode.window.createQuickPick();
+    // Update quickPick with real items
     quickPick.items = itemsForSearch.slice(0, 50);
-    quickPick.matchOnDescription = false;
-    quickPick.matchOnDetail = false;
-    quickPick.placeholder = "Search symbols (FZF)";
+    quickPick.busy = false;
 
     // Store original editor state to return to if canceled
     let lastSelectedItem: SymbolQuickPickItem | undefined;
@@ -275,8 +295,6 @@ const searchSymbols = vscode.commands.registerCommand(
         });
       }
     });
-
-    quickPick.show();
   }
 );
 
