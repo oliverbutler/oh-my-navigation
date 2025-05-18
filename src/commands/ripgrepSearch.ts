@@ -36,24 +36,39 @@ async function searchWithRipgrepCommand(outputChannel: vscode.OutputChannel) {
       vscode.ConfigurationTarget.Global
     );
 
-  // Get the word under cursor
-  const wordRange = document.getWordRangeAtPosition(position);
-  if (!wordRange) {
-    vscode.window.showInformationMessage("No word found under cursor");
-    return;
+  // Get either the selected text or the word under cursor
+  let searchTerm = "";
+
+  // Check if there's an active selection
+  if (!editor.selection.isEmpty) {
+    // Use the selected text as search term
+    searchTerm = document.getText(editor.selection);
+  } else {
+    // Fall back to word under cursor
+    const wordRange = document.getWordRangeAtPosition(position);
+    if (!wordRange) {
+      vscode.window.showInformationMessage("No word found under cursor");
+      return;
+    }
+
+    searchTerm = document.getText(wordRange);
   }
 
-  const searchTerm = document.getText(wordRange);
   if (!searchTerm) {
-    vscode.window.showInformationMessage("No word found under cursor");
+    vscode.window.showInformationMessage(
+      "No text selected or word found under cursor"
+    );
     return;
   }
 
   // Show progress while searching
+  const searchSource = !editor.selection.isEmpty
+    ? "selection"
+    : "word under cursor";
   const matches: RipgrepMatch[] = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Searching for "${searchTerm}"`,
+      title: `Searching for "${searchTerm}" from ${searchSource}`,
       cancellable: true,
     },
     async (progress, token) => {
@@ -169,7 +184,10 @@ async function searchWithRipgrepCommand(outputChannel: vscode.OutputChannel) {
   const quickPick = vscode.window.createQuickPick<LocationQuickPickItem>();
   quickPick.items = validItems;
   quickPick.matchOnDescription = true;
-  quickPick.placeholder = `Search results for '${searchTerm}' (${validItems.length} matches) - Search by filename, code, or path`;
+  const searchDisplay = !editor.selection.isEmpty
+    ? "selection"
+    : "word under cursor";
+  quickPick.placeholder = `Search results for '${searchTerm}' from ${searchDisplay} (${validItems.length} matches) - Search by filename, code, or path`;
   quickPick.show();
 
   // Set up fuzzy search

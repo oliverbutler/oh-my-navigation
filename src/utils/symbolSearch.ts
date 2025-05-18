@@ -195,6 +195,7 @@ export function getLanguageIdFromFilePath(filePath: string): string {
     ".js": "javascript",
     ".jsx": "javascriptreact",
     ".ts": "typescript",
+    ".d.ts": "typescript",
     ".tsx": "typescriptreact",
     ".go": "go",
     ".py": "python",
