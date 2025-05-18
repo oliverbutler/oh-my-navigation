@@ -247,18 +247,43 @@ async function searchWithRipgrepCommand(outputChannel: vscode.OutputChannel) {
         });
 
         const linePosition = line - 1;
-        const range = new vscode.Range(
-          linePosition,
-          selected.range.start.character,
-          linePosition,
-          selected.range.end.character
-        );
 
+        // Get the actual text content of the line in the preview document
+        const lineText = doc.lineAt(linePosition).text;
+
+        // Find the actual position of the search term in the line text
+        // This ensures the highlighting is correctly positioned
+        const lowerLineText = lineText.toLowerCase();
+        const lowerSearchTerm = searchTerm.toLowerCase();
+        const startChar = lowerLineText.indexOf(lowerSearchTerm);
+
+        // If we found the term in the line, use those positions for highlighting
+        // Otherwise fall back to the positions from ripgrep
+        let range: vscode.Range;
+        if (startChar >= 0) {
+          const endChar = startChar + searchTerm.length;
+          range = new vscode.Range(
+            linePosition,
+            startChar,
+            linePosition,
+            endChar
+          );
+        } else {
+          // Fallback to ripgrep positions if we can't find the term
+          range = new vscode.Range(
+            linePosition,
+            selected.range.start.character,
+            linePosition,
+            selected.range.end.character
+          );
+        }
+
+        // Set selection to match our found range
         previewEditor.selection = new vscode.Selection(
-          linePosition,
-          selected.range.start.character,
-          linePosition,
-          selected.range.end.character
+          range.start.line,
+          range.start.character,
+          range.end.line,
+          range.end.character
         );
 
         previewEditor.revealRange(range, vscode.TextEditorRevealType.InCenter);
