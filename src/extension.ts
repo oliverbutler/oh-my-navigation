@@ -105,8 +105,6 @@ const searchSymbols = vscode.commands.registerCommand(
         const score = scores.get(key);
         if (score) {
           item.score = score.score;
-          // Update detail to show the score
-          item.detail = score.score > 0 ? `Score: ${score.score}` : undefined;
         }
       }
 
@@ -150,104 +148,85 @@ const searchSymbols = vscode.commands.registerCommand(
     let fzf = new Fzf(itemsForSearch, {
       selector: (item) => item.label,
       casing: "smart-case",
-      limit: 50,
+      limit: 20,
     });
 
-    // --- Always revalidate in background ---
-    let progressResolve: (() => void) | undefined;
-    let progressStart = Date.now();
-    vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Olly: Loading '${picked.label}' symbols (showing ${itemsForSearch.length} stale results)`,
-        cancellable: false,
-      },
-      async (progress) => {
-        progress.report({ message: "Searching..." });
-        progressResolve = () => {};
-        const symbols = await findSymbols(picked.value, rootPath);
-        const duration = Date.now() - progressStart;
-        if (symbols.length === 0) {
-          quickPick.items = [
-            {
-              label: "No symbols found.",
-              description: "",
-              alwaysShow: true,
-            },
-          ];
-          quickPick.busy = false;
-          symbolCache[cacheKey] = [];
-          vscode.window.showInformationMessage(
-            `Olly: No '${picked.label}' symbols found (searched in ${duration}ms)`
-          );
-          return;
-        }
-
-        // Create fresh items and enrich with recency scores
-        const freshItems: SymbolQuickPickItem[] = symbols.map((item) => {
-          const relativePath = item.file.startsWith(rootPath)
-            ? item.file.substring(rootPath.length + 1)
-            : item.file;
-          return {
-            label: item.symbol,
-            description: relativePath,
-            iconPath: new vscode.ThemeIcon(symbolTypeToIcon[item.type]),
-            file: item.file,
-            line: item.line,
-          };
-        });
-
-        // Get recency scores for all items
-        const scoreItems = freshItems.map((item) => ({
-          filePath: item.file!,
-          symbolName: item.label,
-        }));
-
-        const scores = await recencyTracker.getScores(scoreItems);
-
-        // Apply scores to items
-        for (const item of freshItems) {
-          const key = `${item.file}#${item.label}`;
-          const score = scores.get(key);
-          if (score) {
-            item.score = score.score;
-            // Update detail to show the score
-            item.detail = score.score > 0 ? `Score: ${score.score}` : undefined;
-          }
-        }
-
-        // Sort by score (highest first), then alphabetically
-        freshItems.sort((a, b) => {
-          // Score sorting (descending)
-          const scoreA = a.score || 0;
-          const scoreB = b.score || 0;
-          if (scoreB !== scoreA) return scoreB - scoreA;
-
-          // Fallback to alphabetical sorting
-          if (a.label !== b.label) return a.label.localeCompare(b.label);
-          if ((a.description || "") !== (b.description || ""))
-            return (a.description || "").localeCompare(b.description || "");
-          return (a.line || 0) - (b.line || 0);
-        });
-
-        symbolCache[cacheKey] = freshItems;
-        itemsForSearch = freshItems;
-
-        // Update FZF instance and quickPick items if quickPick is still open
-        if (!quickPick.busy) return; // If user already accepted/canceled, skip
-        fzf = new Fzf(itemsForSearch, {
-          selector: (item) => item.label,
-          casing: "smart-case",
-          limit: 50,
-        });
-        quickPick.items = freshItems.slice(0, 50);
+    const backgroundSearch = async () => {
+      const symbols = await findSymbols(picked.value, rootPath);
+      if (symbols.length === 0) {
+        quickPick.items = [
+          {
+            label: "No symbols found.",
+            description: "",
+            alwaysShow: true,
+          },
+        ];
         quickPick.busy = false;
-        vscode.window.showInformationMessage(
-          `Olly: '${picked.label}' symbols loaded (${freshItems.length} found in ${duration}ms)`
-        );
-        if (progressResolve) progressResolve();
+        symbolCache[cacheKey] = [];
+        return;
       }
-    );
+
+      // Create fresh items and enrich with recency scores
+      const freshItems: SymbolQuickPickItem[] = symbols.map((item) => {
+        const relativePath = item.file.startsWith(rootPath)
+          ? item.file.substring(rootPath.length + 1)
+          : item.file;
+        return {
+          label: item.symbol,
+          description: relativePath,
+          iconPath: new vscode.ThemeIcon(symbolTypeToIcon[item.type]),
+          file: item.file,
+          line: item.line,
+        };
+      });
+
+      // Get recency scores for all items
+      const scoreItems = freshItems.map((item) => ({
+        filePath: item.file!,
+        symbolName: item.label,
+      }));
+
+      const scores = await recencyTracker.getScores(scoreItems);
+
+      // Apply scores to items
+      for (const item of freshItems) {
+        const key = `${item.file}#${item.label}`;
+        const score = scores.get(key);
+        if (score) {
+          item.score = score.score;
+        }
+      }
+
+      // Sort by score (highest first), then alphabetically
+      freshItems.sort((a, b) => {
+        // Score sorting (descending)
+        const scoreA = a.score || 0;
+        const scoreB = b.score || 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+
+        // Fallback to alphabetical sorting
+        if (a.label !== b.label) return a.label.localeCompare(b.label);
+        if ((a.description || "") !== (b.description || ""))
+          return (a.description || "").localeCompare(b.description || "");
+        return (a.line || 0) - (b.line || 0);
+      });
+
+      symbolCache[cacheKey] = freshItems;
+      itemsForSearch = freshItems;
+
+      // Update FZF instance and quickPick items if quickPick is still open
+      if (!quickPick.busy) return; // If user already accepted/canceled, skip
+
+      fzf = new Fzf(itemsForSearch, {
+        selector: (item) => item.label,
+        casing: "smart-case",
+        limit: 20,
+      });
+      quickPick.items = freshItems.slice(0, 20);
+      quickPick.busy = false;
+    };
+
+    void backgroundSearch();
 
     // Store original editor state to return to if canceled
     let lastSelectedItem: SymbolQuickPickItem | undefined;
@@ -268,15 +247,11 @@ const searchSymbols = vscode.commands.registerCommand(
 
     quickPick.onDidChangeValue((value) => {
       if (!value) {
-        quickPick.items = itemsForSearch.slice(0, 50);
+        quickPick.items = itemsForSearch;
         return;
       }
 
-      // Use FZF to find matches
       const results = fzf.find(value);
-
-      // Get FZF matches but then re-sort them to factor in recency score
-      // This combines fuzzy match quality with recency/frequency scoring
 
       if (results.length === 0) {
         quickPick.items = [];
@@ -286,39 +261,40 @@ const searchSymbols = vscode.commands.registerCommand(
       // Find max FZF score to normalize properly
       const maxFzfScore = Math.max(...results.map((r) => r.score));
 
-      const sortedResults = results
-        .map((result: { item: SymbolQuickPickItem; score: number }) => {
-          // Get the recency/frequency score (default to 0 if not exists)
-          const recencyScore = result.item.score || 0;
+      const enrichedResults: SymbolQuickPickItem[] = results.map((result) => {
+        const recencyScore = result.item.score || 0;
 
-          // Properly normalize FZF score to 0-100 range based on max score in result set
-          const normalizedFzfScore = (result.score / maxFzfScore) * 100;
+        const normalizedFzfScore = (result.score / maxFzfScore) * 100;
 
-          // Combined score: 60% FZF match quality, 40% recency/frequency
-          const combinedScore = normalizedFzfScore * 0.6 + recencyScore * 0.4;
+        // Combined score: 60% FZF match quality, 40% recency/frequency
+        const combinedScore = normalizedFzfScore * 0.6 + recencyScore * 0.4;
 
-          outputChannel.appendLine(
-            `Symbol: ${result.item.label}, Recency: ${recencyScore.toFixed(
-              1
-            )}, FZF: ${result.score.toFixed(1)} → ${normalizedFzfScore.toFixed(
-              1
-            )}, Combined: ${combinedScore.toFixed(1)}`
-          );
+        return {
+          ...result.item,
+          label: `${result.item.label}`,
+          alwaysShow: true,
+          score: combinedScore,
+        };
+      });
 
-          return {
-            item: result.item,
-            fzfScore: result.score,
-            recencyScore,
-            combinedScore,
-          };
-        })
-        // Sort by combined score (descending)
-        .sort((a, b) => a.combinedScore - b.combinedScore)
-        // Extract just the items for display
-        .map((result) => result.item);
+      const sortedResults = enrichedResults.sort(
+        (a, b) => (b.score ?? 0) - (a.score ?? 0)
+      );
 
-      // Update quickPick with sorted results
-      quickPick.items = sortedResults.slice(0, 50);
+      outputChannel.appendLine(
+        `Olly: '${picked.label}' first 4 items: ${JSON.stringify(
+          sortedResults
+            .map((r) => `${r.label} score: ${r.score?.toFixed(1)}`)
+            .slice(0, 4)
+        )}`
+      );
+
+      /**
+       * NOTE: Theres a bug here we can't avoid, vscode doesn't let us change the sort order of the results.
+       *
+       * This means even though all the data for recency is there, the resulting list isnt sorted with it.
+       */
+      quickPick.items = sortedResults;
     });
 
     // Preview the selected file when navigating
