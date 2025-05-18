@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as path from "path";
 import * as child_process from "child_process";
-import { runRipgrep, findSymbols, symbolPatterns } from "../symbolSearch";
+import { runRipgrep, findSymbols, symbolPatterns } from "../utils/symbolSearch";
 
 // This is an integration test that actually runs ripgrep against test fixtures
 // It depends on ripgrep being installed in the system

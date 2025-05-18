@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
-import { RecencyTracker } from "../recencyTracker";
+import { RecencyTracker } from "../utils/recencyTracker";
 
-// Mock context to simulate ExtensionContext
 class MockContext {
   public globalState = {
     get: jest.fn(),
@@ -21,7 +20,6 @@ describe("RecencyTracker", () => {
   let tracker: RecencyTracker;
 
   beforeEach(() => {
-    // Set up mocks
     mockContext = new MockContext() as unknown as vscode.ExtensionContext;
     (mockContext.globalState.get as jest.Mock).mockReturnValue({});
     tracker = new RecencyTracker(mockContext);
