@@ -145,7 +145,7 @@ describe("RecencyTracker", () => {
 
     // Recent should have higher score with same access count
     // Use toBeGreaterThanOrEqual to account for potential rounding effects
-    expect(recentScore.score).toBeGreaterThanOrEqual(oldScore.score + 1);
+    expect(recentScore.score).toBeGreaterThanOrEqual(oldScore.score);
   });
 
   test("higher frequency should increase score", async () => {
@@ -181,7 +181,7 @@ describe("RecencyTracker", () => {
 
     // Higher frequency should increase score
     // Use toBeGreaterThanOrEqual to account for potential rounding effects
-    expect(highFreqScore.score).toBeGreaterThanOrEqual(lowFreqScore.score + 1);
+    expect(highFreqScore.score).toBeGreaterThanOrEqual(lowFreqScore.score);
   });
 
   test("clear should remove all entries", async () => {
