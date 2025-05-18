@@ -28,6 +28,10 @@
         "title": "Olly: Search Symbols"
       },
       {
+        "command": "olly.goToReferences",
+        "title": "Olly: Go to References"
+      },
+      {
         "command": "olly.clearRecencyData",
         "title": "Olly: Clear Recency Data"
       },
