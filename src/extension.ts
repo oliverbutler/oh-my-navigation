@@ -86,6 +86,41 @@ class SymbolPreviewContentProvider
   }
 }
 
+// Helper to get language ID from file extension
+function getLanguageIdFromFilePath(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  // Map common extensions to language IDs
+  const extensionMap: Record<string, string> = {
+    ".js": "javascript",
+    ".jsx": "javascriptreact",
+    ".ts": "typescript",
+    ".tsx": "typescriptreact",
+    ".go": "go",
+    ".py": "python",
+    ".html": "html",
+    ".css": "css",
+    ".json": "json",
+    ".md": "markdown",
+    ".yml": "yaml",
+    ".yaml": "yaml",
+    ".sh": "shellscript",
+    ".bash": "shellscript",
+    ".php": "php",
+    ".rb": "ruby",
+    ".java": "java",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".h": "cpp",
+    ".cs": "csharp",
+    ".fs": "fsharp",
+    ".rs": "rust",
+    ".swift": "swift",
+    ".sql": "sql",
+  };
+
+  return extensionMap[ext] || "plaintext";
+}
+
 // Create a singleton preview provider that can be accessed from everywhere
 const previewProvider = new SymbolPreviewContentProvider();
 
@@ -406,16 +441,21 @@ const searchSymbols = vscode.commands.registerCommand(
         try {
           const filePath = path.join(rootPath, selected.description);
           const line = selected.line || 1;
+          const langId = getLanguageIdFromFilePath(filePath);
 
           // Create a URI with our custom scheme
           const previewUri = vscode.Uri.parse(
             `${PREVIEW_SCHEME}:Symbol Preview?path=${encodeURIComponent(
               filePath
-            )}&line=${line}`
+            )}&line=${line}&language=${langId}`
           );
 
           // Open with our lightweight preview provider
           const doc = await vscode.workspace.openTextDocument(previewUri);
+
+          // Set the language ID for syntax highlighting
+          await vscode.languages.setTextDocumentLanguage(doc, langId);
+
           const previewEditor = await vscode.window.showTextDocument(doc, {
             viewColumn: vscode.ViewColumn.Active,
             preview: true,
@@ -497,11 +537,26 @@ const searchSymbols = vscode.commands.registerCommand(
       quickPick.hide();
     });
 
-    quickPick.onDidHide(() => {
+    quickPick.onDidHide(async () => {
       quickPickActive = false;
 
       // Clean up the disposable
       editorChangeDisposable.dispose();
+
+      // Clear the preview provider cache
+      previewProvider.clearCache();
+
+      // Close any open symbol preview editors
+      const openEditors = vscode.window.visibleTextEditors;
+      for (const editor of openEditors) {
+        if (editor.document.uri.scheme === PREVIEW_SCHEME) {
+          // Close this preview editor
+          await vscode.commands.executeCommand(
+            "workbench.action.closeActiveEditor"
+          );
+          break; // Only close one editor, which should be the active one
+        }
+      }
 
       // Restore original setting
       vscode.workspace
