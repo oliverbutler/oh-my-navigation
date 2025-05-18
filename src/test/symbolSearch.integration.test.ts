@@ -1,12 +1,7 @@
 import * as assert from "assert";
 import * as path from "path";
 import * as child_process from "child_process";
-import {
-  runRipgrep,
-  findSymbols,
-  symbolPatterns,
-  extractSymbol,
-} from "../symbolSearch";
+import { runRipgrep, findSymbols, symbolPatterns } from "../symbolSearch";
 
 // This is an integration test that actually runs ripgrep against test fixtures
 // It depends on ripgrep being installed in the system
@@ -28,7 +23,7 @@ describe("Symbol Search Integration Tests", () => {
   // Skip all tests if ripgrep is not available
   beforeEach(() => {
     if (!ripgrepAvailable) {
-      pending("Ripgrep is not installed, skipping test");
+      throw new Error("Ripgrep is not installed, skipping test");
     }
   });
 
@@ -286,6 +281,32 @@ describe("Symbol Search Integration Tests", () => {
           file: "./testReact.tsx",
           line: 29,
           type: "react",
+        },
+      ]);
+    });
+
+    it("can find 'methods' symbols", async () => {
+      const symbols = await findSymbols("method", fixturesDir);
+      expect(symbols).toHaveLength(3);
+
+      expect(symbols).toStrictEqual([
+        {
+          symbol: "testMethod",
+          file: "./testClass.ts",
+          line: 5,
+          type: "method",
+        },
+        {
+          symbol: "factoryMethod",
+          file: "./testClass.ts",
+          line: 11,
+          type: "method",
+        },
+        {
+          symbol: "render",
+          file: "./testReact.tsx",
+          line: 30,
+          type: "method",
         },
       ]);
     });

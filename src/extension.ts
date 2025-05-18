@@ -1,59 +1,16 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import {
-  SymbolType,
-  extractSymbol,
   findSymbols,
   getLanguageIdFromFilePath,
   symbolTypeToIcon,
 } from "./symbolSearch";
-
-// Custom scheme for file previews
-const PREVIEW_SCHEME = "symbol-preview";
-
-// ContentProvider for efficient file previews without triggering LSP
-class SymbolPreviewContentProvider
-  implements vscode.TextDocumentContentProvider
-{
-  private readonly _onDidChange = new vscode.EventEmitter<vscode.Uri>();
-  readonly onDidChange = this._onDidChange.event;
-  private fileContents = new Map<string, string>();
-
-  constructor() {}
-
-  async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
-    // Parse URI parameters
-    const params = new URLSearchParams(uri.query);
-    const filePath = params.get("path") || "";
-    const line = parseInt(params.get("line") || "1", 10);
-
-    // Check cache first
-    if (this.fileContents.has(filePath)) {
-      return this.fileContents.get(filePath) || "";
-    }
-
-    try {
-      const fs = require("fs");
-      const content = fs.readFileSync(filePath, "utf8");
-      this.fileContents.set(filePath, content);
-      return content;
-    } catch (err) {
-      return `Error loading preview: ${err}`;
-    }
-  }
-
-  // Clear cache when no longer needed
-  clearCache(filePath?: string) {
-    if (filePath) {
-      this.fileContents.delete(filePath);
-    } else {
-      this.fileContents.clear();
-    }
-  }
-}
-
-// Create a singleton preview provider that can be accessed from everywhere
-const previewProvider = new SymbolPreviewContentProvider();
+import {
+  PREVIEW_SCHEME,
+  SymbolPreviewContentProvider,
+  previewProvider,
+  getSymbolPreviewUri,
+} from "./symbolPreview";
 
 // Define a custom type for symbol items
 interface SymbolQuickPickItem extends vscode.QuickPickItem {
@@ -196,11 +153,7 @@ const searchSymbols = vscode.commands.registerCommand(
           const langId = getLanguageIdFromFilePath(filePath);
 
           // Create a URI with our custom scheme
-          const previewUri = vscode.Uri.parse(
-            `${PREVIEW_SCHEME}:Symbol Preview?path=${encodeURIComponent(
-              filePath
-            )}&line=${line}&language=${langId}`
-          );
+          const previewUri = getSymbolPreviewUri(filePath, line, langId);
 
           // Open with our lightweight preview provider
           const doc = await vscode.workspace.openTextDocument(previewUri);
@@ -281,9 +234,6 @@ const searchSymbols = vscode.commands.registerCommand(
         );
       }
 
-      // Clear the preview cache
-      previewProvider.clearCache();
-
       // Clean up the disposable
       editorChangeDisposable.dispose();
       quickPick.hide();
@@ -294,9 +244,6 @@ const searchSymbols = vscode.commands.registerCommand(
 
       // Clean up the disposable
       editorChangeDisposable.dispose();
-
-      // Clear the preview provider cache
-      previewProvider.clearCache();
 
       // Close any open symbol preview editors
       const openEditors = vscode.window.visibleTextEditors;
@@ -334,14 +281,6 @@ const searchSymbols = vscode.commands.registerCommand(
 );
 
 export function activate(context: vscode.ExtensionContext) {
-  // Register the content provider for symbol previews
-  const providerRegistration =
-    vscode.workspace.registerTextDocumentContentProvider(
-      PREVIEW_SCHEME,
-      previewProvider
-    );
-  context.subscriptions.push(providerRegistration);
-
   const swapToSibling = vscode.commands.registerCommand(
     "olly.swapToSibling",
     async () => {
@@ -394,6 +333,14 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }
   );
+
+  // Register the content provider for symbol previews (now from symbolPreview)
+  const providerRegistration =
+    vscode.workspace.registerTextDocumentContentProvider(
+      PREVIEW_SCHEME,
+      previewProvider
+    );
+  context.subscriptions.push(providerRegistration);
 
   context.subscriptions.push(swapToSibling);
   context.subscriptions.push(searchSymbols);

@@ -70,11 +70,15 @@ export const symbolTypeToIcon: Record<SymbolType, string> = {
   unknown: "symbol-misc",
 };
 
+type SymbolPattern = {
+  patterns: string[];
+  exts: string[];
+  type: SymbolType;
+  ignore?: string[];
+};
+
 // Symbol patterns for JS/TS/Go
-export const symbolPatterns: Record<
-  string,
-  { patterns: string[]; exts: string[]; type: SymbolType }
-> = {
+export const symbolPatterns: Record<string, SymbolPattern> = {
   // JS/TS
   class: {
     patterns: [String.raw`\bclass\s+([A-Z][a-zA-Z0-9_]*)`],
@@ -95,6 +99,16 @@ export const symbolPatterns: Record<
     ],
     exts: ["*.ts", "*.tsx", "*.js", "*.jsx"],
     type: "method",
+    ignore: [
+      "expect",
+      "describe",
+      "it",
+      "beforeAll",
+      "beforeEach",
+      "afterEach",
+      "afterAll",
+      "constructor",
+    ],
   },
   variable: {
     patterns: [String.raw`\b(const|let|var)\s+([a-zA-Z0-9_]+)\s*=`],
@@ -213,8 +227,7 @@ export async function findSymbols(
   symbolType: string,
   rootPath: string
 ): Promise<{ symbol: string; file: string; line: number; type: SymbolType }[]> {
-  let searchSet: { patterns: string[]; exts: string[]; type: SymbolType }[] =
-    [];
+  let searchSet: SymbolPattern[] = [];
 
   if (symbolType === "all") {
     searchSet = [
@@ -252,6 +265,8 @@ export async function findSymbols(
         const [, file, lineNum, colNum, code] = match;
         const symbol = extractSymbol(code, regex);
         if (!symbol) continue;
+
+        if (search.ignore?.includes(symbol)) continue;
 
         results.push({
           symbol,
