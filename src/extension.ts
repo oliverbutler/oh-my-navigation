@@ -290,7 +290,7 @@ const searchSymbols = vscode.commands.registerCommand(
       );
 
       /**
-       * NOTE: Theres a bug here we can't avoid, vscode doesn't let us change the sort order of the results.
+       * BUG: Theres a bug here we can't avoid, vscode doesn't let us change the sort order of the results.
        *
        * This means even though all the data for recency is there, the resulting list isnt sorted with it.
        */
