@@ -30,6 +30,10 @@
       {
         "command": "olly.clearRecencyData",
         "title": "Olly: Clear Recency Data"
+      },
+      {
+        "command": "olly.showLogs",
+        "title": "Olly: Show Debug Logs"
       }
     ]
   },

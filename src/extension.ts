@@ -32,6 +32,9 @@ function getCacheKey(type: string, rootPath: string) {
 // Global recency tracker instance
 let recencyTracker: RecencyTracker;
 
+// Output channel for extension logging
+let outputChannel: vscode.OutputChannel;
+
 // Main searchSymbols command
 const searchSymbols = vscode.commands.registerCommand(
   "olly.searchSymbols",
@@ -235,7 +238,6 @@ const searchSymbols = vscode.commands.registerCommand(
         fzf = new Fzf(itemsForSearch, {
           selector: (item) => item.label,
           casing: "smart-case",
-          sort: true,
           limit: 50,
         });
         quickPick.items = freshItems.slice(0, 50);
@@ -273,9 +275,50 @@ const searchSymbols = vscode.commands.registerCommand(
       // Use FZF to find matches
       const results = fzf.find(value);
 
-      quickPick.items = results.map(
-        (result: { item: SymbolQuickPickItem }) => result.item
-      );
+      // Get FZF matches but then re-sort them to factor in recency score
+      // This combines fuzzy match quality with recency/frequency scoring
+
+      if (results.length === 0) {
+        quickPick.items = [];
+        return;
+      }
+
+      // Find max FZF score to normalize properly
+      const maxFzfScore = Math.max(...results.map((r) => r.score));
+
+      const sortedResults = results
+        .map((result: { item: SymbolQuickPickItem; score: number }) => {
+          // Get the recency/frequency score (default to 0 if not exists)
+          const recencyScore = result.item.score || 0;
+
+          // Properly normalize FZF score to 0-100 range based on max score in result set
+          const normalizedFzfScore = (result.score / maxFzfScore) * 100;
+
+          // Combined score: 60% FZF match quality, 40% recency/frequency
+          const combinedScore = normalizedFzfScore * 0.6 + recencyScore * 0.4;
+
+          outputChannel.appendLine(
+            `Symbol: ${result.item.label}, Recency: ${recencyScore.toFixed(
+              1
+            )}, FZF: ${result.score.toFixed(1)} → ${normalizedFzfScore.toFixed(
+              1
+            )}, Combined: ${combinedScore.toFixed(1)}`
+          );
+
+          return {
+            item: result.item,
+            fzfScore: result.score,
+            recencyScore,
+            combinedScore,
+          };
+        })
+        // Sort by combined score (descending)
+        .sort((a, b) => a.combinedScore - b.combinedScore)
+        // Extract just the items for display
+        .map((result) => result.item);
+
+      // Update quickPick with sorted results
+      quickPick.items = sortedResults.slice(0, 50);
     });
 
     // Preview the selected file when navigating
@@ -427,8 +470,18 @@ const searchSymbols = vscode.commands.registerCommand(
 );
 
 export function activate(context: vscode.ExtensionContext) {
+  // Initialize output channel
+  outputChannel = vscode.window.createOutputChannel("Olly");
+  context.subscriptions.push(outputChannel);
+  outputChannel.appendLine("Olly extension activated");
+
   // Initialize recency tracker
   recencyTracker = new RecencyTracker(context);
+
+  // Command to show logs
+  const showLogs = vscode.commands.registerCommand("olly.showLogs", () => {
+    outputChannel.show();
+  });
 
   const swapToSibling = vscode.commands.registerCommand(
     "olly.swapToSibling",
@@ -503,6 +556,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(swapToSibling);
   context.subscriptions.push(searchSymbols);
   context.subscriptions.push(clearRecencyData);
+  context.subscriptions.push(showLogs);
 }
 
 export function deactivate() {}
