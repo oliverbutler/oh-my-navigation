@@ -32,6 +32,18 @@
         "title": "Olly: Go to References"
       },
       {
+        "command": "olly.goToDefinition",
+        "title": "Olly: Go to Definition"
+      },
+      {
+        "command": "olly.goToImplementation",
+        "title": "Olly: Go to Implementation"
+      },
+      {
+        "command": "olly.goToTypeDefinition",
+        "title": "Olly: Go to Type Definition"
+      },
+      {
         "command": "olly.clearRecencyData",
         "title": "Olly: Clear Recency Data"
       },
