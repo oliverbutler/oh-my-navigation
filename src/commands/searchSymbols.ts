@@ -194,16 +194,6 @@ export function registerSearchSymbolsCommand(
       };
       void backgroundSearch();
 
-      let quickPickActive = true;
-
-      const editorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(
-        () => {
-          if (quickPickActive) {
-            quickPick.show();
-          }
-        }
-      );
-
       quickPick.onDidChangeValue((value) => {
         if (lastCommandTracker && picked) {
           lastCommandTracker.setLastCommand("omn.searchSymbols", [
@@ -260,6 +250,8 @@ export function registerSearchSymbolsCommand(
       });
 
       quickPick.onDidAccept(async () => {
+        await previewManager.dispose();
+
         const selected = quickPick.selectedItems[0];
         if (selected) {
           if (selected.file && selected.label) {
@@ -285,15 +277,12 @@ export function registerSearchSymbolsCommand(
           editor.selection = selection;
           editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
         }
-        editorChangeDisposable.dispose();
-        await previewManager.dispose();
-        quickPick.hide();
       });
 
       quickPick.onDidHide(async () => {
-        quickPickActive = false;
-        editorChangeDisposable.dispose();
+        outputChannel.appendLine("OMN: onDidHide Quick pick hidden");
         await previewManager.dispose();
+        quickPick.dispose();
       });
     }
   );

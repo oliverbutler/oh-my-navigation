@@ -168,6 +168,8 @@ export class PreviewManager {
    * and closing any open preview
    */
   async dispose(): Promise<void> {
+    this.outputChannel?.appendLine("OMN: Disposing preview manager");
+
     if (!this.initialized) return;
 
     // Clean up decoration
