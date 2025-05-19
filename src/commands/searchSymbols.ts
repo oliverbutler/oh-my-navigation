@@ -298,7 +298,7 @@ export function registerSearchSymbolsCommand(
               backgroundColor: new vscode.ThemeColor(
                 "editor.findMatchHighlightBackground"
               ),
-              isWholeLine: true,
+              isWholeLine: false,
             });
             previewEditor.setDecorations(decoration, [range]);
           } catch (err) {
@@ -330,13 +330,24 @@ export function registerSearchSymbolsCommand(
             path.join(rootPath, selected.description ?? "")
           );
           const doc = await vscode.workspace.openTextDocument(fileUri);
+          const selection = new vscode.Selection(
+            selected.line - 1,
+            selected.startColumn - 1,
+            selected.line - 1,
+            selected.endColumn - 1
+          );
           const editor = await vscode.window.showTextDocument(doc, {
             preview: false,
             viewColumn: vscode.ViewColumn.Active,
+            selection,
           });
-          const line = (selected.line ?? 1) - 1;
-          const pos = new vscode.Position(line, selected.startColumn);
-          editor.selection = new vscode.Selection(pos, pos);
+          outputChannel.appendLine(
+            `OMN: Opened file: ${selected.description} at line: ${selected.line} at column: ${selected.startColumn}`
+          );
+          const pos = new vscode.Position(
+            selected.line - 1,
+            selected.startColumn - 1
+          );
           editor.revealRange(
             new vscode.Range(pos, pos),
             vscode.TextEditorRevealType.InCenter
