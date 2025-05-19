@@ -141,7 +141,7 @@ describe("Symbol Search Integration Tests", () => {
         {
           symbol: "ClassComponent",
           file: "./testReact.tsx",
-          line: 29,
+          line: 30,
           startColumn: 21,
           endColumn: 34,
           type: "class",
@@ -156,7 +156,7 @@ describe("Symbol Search Integration Tests", () => {
       expect(symbols).toEqual([
         {
           file: "./testReact.tsx",
-          line: 8,
+          line: 9,
           symbol: "Card",
           type: "function",
           startColumn: 24,
@@ -164,7 +164,7 @@ describe("Symbol Search Integration Tests", () => {
         },
         {
           file: "./testReact.tsx",
-          line: 23,
+          line: 24,
           symbol: "MemoComponent",
           type: "function",
           startColumn: 84,
@@ -301,7 +301,7 @@ describe("Symbol Search Integration Tests", () => {
         {
           symbol: "Card",
           file: "./testReact.tsx",
-          line: 8,
+          line: 9,
           type: "react",
           startColumn: 17,
           endColumn: 20,
@@ -309,7 +309,7 @@ describe("Symbol Search Integration Tests", () => {
         {
           symbol: "MemoizedComponent",
           file: "./testReact.tsx",
-          line: 23,
+          line: 24,
           type: "react",
           startColumn: 7,
           endColumn: 23,
@@ -317,7 +317,7 @@ describe("Symbol Search Integration Tests", () => {
         {
           symbol: "ClassComponent",
           file: "./testReact.tsx",
-          line: 29,
+          line: 30,
           type: "react",
           startColumn: 14,
           endColumn: 27,
@@ -349,12 +349,30 @@ describe("Symbol Search Integration Tests", () => {
         {
           symbol: "render",
           file: "./testReact.tsx",
-          line: 30,
+          line: 31,
           type: "method",
           startColumn: 3,
           endColumn: 8,
         },
       ]);
+    });
+
+    it("can find 'variable' symbols", async () => {
+      const symbols = await findSymbols("variable", fixturesDir);
+      expect(symbols).toHaveLength(7);
+
+      const indentedVariable = symbols.find(
+        (symbol) => symbol.symbol === "indentedVariable"
+      );
+
+      expect(indentedVariable).toStrictEqual({
+        symbol: "indentedVariable",
+        file: "./testReact.tsx",
+        line: 5,
+        type: "variable",
+        startColumn: 9,
+        endColumn: 24,
+      });
     });
   });
 });

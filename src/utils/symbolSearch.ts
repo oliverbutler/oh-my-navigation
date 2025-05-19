@@ -273,6 +273,7 @@ export async function findSymbols(
       const regex = new RegExp(pattern);
       for (const line of lines) {
         const match = line.match(/^(.+?):(\d+):(\d+):(.*)$/);
+        console.log(line);
         if (!match) continue;
         const [, file, lineNum, colNum, code] = match;
         const symbol = extractSymbol(code, regex);
@@ -285,9 +286,18 @@ export async function findSymbols(
         if (symbolIndex === -1) continue; // Sanity check
 
         // Calculate accurate start and end columns
-        const actualStartColumn = Number(colNum) + symbolIndex;
+        const actualStartColumn = symbolIndex + 1;
         const actualEndColumn = actualStartColumn + symbol.length - 1;
 
+        console.log(
+          file,
+          lineNum,
+          colNum,
+          `"${code}"`,
+          `"${symbol}"`,
+          actualStartColumn,
+          actualEndColumn
+        );
         results.push({
           symbol,
           file,

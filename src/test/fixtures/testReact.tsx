@@ -2,6 +2,7 @@
 import React from "react";
 
 export const Button = (props: { text: string; onClick: () => void }) => {
+  const indentedVariable = "I'm indented";
   return <button onClick={props.onClick}>{props.text}</button>;
 };
 

@@ -78,7 +78,7 @@ export function registerSearchSymbolsCommand(
         { label: "React Components", value: "react" },
       ];
 
-      let picked;
+      let picked: (typeof symbolTypes)[number] | undefined;
       if (typeArg) {
         picked = symbolTypes.find((t) => t.value === typeArg);
       } else {
@@ -197,7 +197,6 @@ export function registerSearchSymbolsCommand(
       };
       void backgroundSearch();
 
-      let lastSelectedItem: SymbolQuickPickItem | undefined;
       let isPreviewingFile = false;
       let quickPickActive = true;
 
@@ -210,12 +209,6 @@ export function registerSearchSymbolsCommand(
       );
 
       quickPick.onDidChangeValue((value) => {
-        if (!value) {
-          quickPick.items = itemsForSearch;
-          return;
-        }
-
-        // Update last command with current type and search value
         if (lastCommandTracker && picked) {
           lastCommandTracker.setLastCommand("omn.searchSymbols", [
             picked.value,
@@ -255,19 +248,14 @@ export function registerSearchSymbolsCommand(
 
       quickPick.onDidChangeActive(async (items) => {
         const selected = items[0];
-        if (
-          selected &&
-          selected !== lastSelectedItem &&
-          selected.description &&
-          !isPreviewingFile
-        ) {
-          lastSelectedItem = selected;
-          isPreviewingFile = true;
+        if (selected && selected.description) {
           try {
             const filePath = path.join(rootPath, selected.description);
-            const line = selected.line || 1;
+
+            const line = selected.line;
             const langId = getLanguageIdFromFilePath(filePath);
             const previewUri = getSymbolPreviewUri(filePath, line, langId);
+
             const doc = await vscode.workspace.openTextDocument(previewUri);
             await vscode.languages.setTextDocumentLanguage(doc, langId);
             const previewEditor = await vscode.window.showTextDocument(doc, {
@@ -275,20 +263,19 @@ export function registerSearchSymbolsCommand(
               preview: true,
               preserveFocus: true,
             });
-            const linePosition = line - 1;
 
             const range = new vscode.Range(
-              linePosition,
-              selected.startColumn,
-              linePosition,
-              selected.endColumn
+              line - 1,
+              selected.startColumn - 1,
+              line - 1,
+              selected.startColumn - 1
             );
 
             previewEditor.selection = new vscode.Selection(
-              linePosition,
-              selected.startColumn,
-              linePosition,
-              selected.endColumn
+              line - 1,
+              selected.startColumn - 1,
+              line - 1,
+              selected.startColumn - 1
             );
             previewEditor.revealRange(
               range,
@@ -298,15 +285,15 @@ export function registerSearchSymbolsCommand(
               backgroundColor: new vscode.ThemeColor(
                 "editor.findMatchHighlightBackground"
               ),
-              isWholeLine: false,
+              isWholeLine: true,
             });
             previewEditor.setDecorations(decoration, [range]);
+
+            outputChannel.appendLine(
+              `OMN: Shown preview for: ${selected.label} at line: ${selected.line} at column: ${selected.startColumn} to ${selected.endColumn}`
+            );
           } catch (err) {
             console.error("Failed to preview file:", err);
-          } finally {
-            setTimeout(() => {
-              isPreviewingFile = false;
-            }, 200);
           }
         }
       });
@@ -334,24 +321,17 @@ export function registerSearchSymbolsCommand(
             selected.line - 1,
             selected.startColumn - 1,
             selected.line - 1,
-            selected.endColumn - 1
+            selected.startColumn - 1
           );
           const editor = await vscode.window.showTextDocument(doc, {
             preview: false,
             viewColumn: vscode.ViewColumn.Active,
-            selection,
           });
           outputChannel.appendLine(
             `OMN: Opened file: ${selected.description} at line: ${selected.line} at column: ${selected.startColumn}`
           );
-          const pos = new vscode.Position(
-            selected.line - 1,
-            selected.startColumn - 1
-          );
-          editor.revealRange(
-            new vscode.Range(pos, pos),
-            vscode.TextEditorRevealType.InCenter
-          );
+          editor.selection = selection;
+          editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
         }
         editorChangeDisposable.dispose();
         quickPick.hide();
