@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
-import { PREVIEW_SCHEME, getSymbolPreviewUri } from "../utils/symbolPreview";
+import {
+  PREVIEW_SCHEME,
+  getSymbolPreviewUri,
+  PreviewManager,
+} from "../utils/symbolPreview";
 import { getLanguageIdFromFilePath } from "../utils/symbolSearch";
 import { RecencyTracker } from "../utils/recencyTracker";
 
@@ -18,7 +22,7 @@ type LocationProviderType =
   | "typeDefinition";
 
 // Mapping of provider types to commands
-const providerCommands = {
+const providerCommands: Record<LocationProviderType, string> = {
   references: "vscode.executeReferenceProvider",
   definition: "vscode.executeDefinitionProvider",
   implementation: "vscode.executeImplementationProvider",
@@ -28,8 +32,9 @@ const providerCommands = {
 // Function to handle symbol navigation
 async function navigateToSymbolLocations(
   providerType: LocationProviderType,
-  outputChannel: vscode.OutputChannel
-) {
+  outputChannel: vscode.OutputChannel,
+  recencyTracker?: RecencyTracker
+): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     vscode.window.showInformationMessage("No active editor");
@@ -38,22 +43,12 @@ async function navigateToSymbolLocations(
 
   const position = editor.selection.active;
   const document = editor.document;
-  const originalEditor = editor;
-  const originalPreviewSetting = vscode.workspace
-    .getConfiguration("workbench.editor")
-    .get("enablePreviewFromQuickOpen");
 
-  // Set preview from quick open
-  await vscode.workspace
-    .getConfiguration("workbench.editor")
-    .update(
-      "enablePreviewFromQuickOpen",
-      true,
-      vscode.ConfigurationTarget.Global
-    );
+  // Create our preview manager
+  const previewManager = new PreviewManager(outputChannel);
 
   // Get display name based on provider type
-  const displayNameMap = {
+  const displayNameMap: Record<LocationProviderType, string> = {
     references: "References",
     definition: "Definition",
     implementation: "Implementations",
@@ -171,16 +166,6 @@ async function navigateToSymbolLocations(
     return;
   }
 
-  // Sort items by file path and line number
-  validItems.sort((a, b) => {
-    // First compare file paths
-    if (a.uri.fsPath !== b.uri.fsPath) {
-      return a.uri.fsPath.localeCompare(b.uri.fsPath);
-    }
-    // If same file, sort by line number
-    return a.range.start.line - b.range.start.line;
-  });
-
   // Set up quickpick
   const quickPick = vscode.window.createQuickPick<LocationQuickPickItem>();
   quickPick.items = validItems;
@@ -190,6 +175,10 @@ async function navigateToSymbolLocations(
   } ${
     providerType === "definition" ? "definitions" : providerType
   }) - Search by filename, code, or path`;
+
+  // Initialize preview manager with quickpick
+  await previewManager.init();
+
   quickPick.show();
 
   // Set up fuzzy search
@@ -201,17 +190,6 @@ async function navigateToSymbolLocations(
   });
 
   let lastSelectedItem: LocationQuickPickItem | undefined;
-  let isPreviewingFile = false;
-  let quickPickActive = true;
-
-  // Set up editor change listener
-  const editorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(
-    () => {
-      if (quickPickActive) {
-        quickPick.show();
-      }
-    }
-  );
 
   // Handle filter input changes
   quickPick.onDidChangeValue((value) => {
@@ -232,7 +210,7 @@ async function navigateToSymbolLocations(
     }));
 
     outputChannel.appendLine(
-      `Olly: ${displayName} first 4 items: ${JSON.stringify(
+      `OMN: ${displayName} first 4 items: ${JSON.stringify(
         sortedResults.map((r) => r.description).slice(0, 4)
       )}`
     );
@@ -243,216 +221,141 @@ async function navigateToSymbolLocations(
   // Handle preview of items
   quickPick.onDidChangeActive(async (activeItems) => {
     const selected = activeItems[0] as LocationQuickPickItem;
-    if (
-      selected &&
-      selected !== lastSelectedItem &&
-      selected.description &&
-      !isPreviewingFile
-    ) {
-      lastSelectedItem = selected;
-      isPreviewingFile = true;
+    if (selected && selected !== lastSelectedItem) {
       try {
-        const filePath = selected.uri.fsPath;
-        const line = selected.range.start.line + 1;
-        const langId = getLanguageIdFromFilePath(filePath);
-        const previewUri = getSymbolPreviewUri(filePath, line, langId);
-        const doc = await vscode.workspace.openTextDocument(previewUri);
-        await vscode.languages.setTextDocumentLanguage(doc, langId);
+        lastSelectedItem = selected;
 
-        const previewEditor = await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.Active,
-          preview: true,
-          preserveFocus: true,
-        });
-
-        const linePosition = line - 1;
-        const range = new vscode.Range(
-          linePosition,
-          selected.range.start.character,
-          linePosition,
-          selected.range.end.character
+        // Show preview of the file
+        await previewManager.showFile(
+          selected.uri.fsPath,
+          selected.range.start.line + 1, // 1-based line number
+          selected.range.start.character + 1, // 1-based character
+          selected.range.end.character + 1
         );
-
-        previewEditor.selection = new vscode.Selection(
-          linePosition,
-          selected.range.start.character,
-          linePosition,
-          selected.range.end.character
-        );
-
-        previewEditor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-
-        const decoration = vscode.window.createTextEditorDecorationType({
-          backgroundColor: new vscode.ThemeColor(
-            "editor.findMatchHighlightBackground"
-          ),
-          fontWeight: "bold",
-        });
-
-        previewEditor.setDecorations(decoration, [range]);
       } catch (err) {
-        console.error("Failed to preview file:", err);
-        outputChannel.appendLine(`Error previewing file: ${err}`);
-      } finally {
-        setTimeout(() => {
-          isPreviewingFile = false;
-        }, 200);
+        console.error("Error previewing file:", err);
       }
     }
   });
 
-  // Handle item selection
-  quickPick.onDidAccept(async () => {
-    const selected = quickPick.selectedItems[0] as LocationQuickPickItem;
+  // Handle selection
+  quickPick.onDidAccept(() => {
+    const selected = quickPick.selectedItems[0];
     if (selected) {
-      // First hide the quickPick to ensure focus will move to the editor
-      quickPickActive = false;
-      quickPick.hide();
+      void (async () => {
+        await previewManager.dispose();
 
-      // Close preview editor if open
-      if (
-        vscode.window.activeTextEditor &&
-        vscode.window.activeTextEditor.document.uri.scheme === PREVIEW_SCHEME
-      ) {
-        await vscode.commands.executeCommand(
-          "workbench.action.closeActiveEditor"
+        // Track if this item was selected previously (if recency tracker is available)
+        if (recencyTracker) {
+          await recencyTracker.recordAccess(
+            selected.uri.fsPath,
+            selected.label
+          );
+        }
+
+        // Open the document
+        const doc = await vscode.workspace.openTextDocument(selected.uri);
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.Active,
+          preview: false,
+        });
+
+        // Position cursor at the start of the range
+        const position = selected.range.start;
+        const selection = new vscode.Selection(position, position);
+        editor.selection = selection;
+        editor.revealRange(
+          selected.range,
+          vscode.TextEditorRevealType.InCenter
         );
-      }
 
-      await navigateToLocation(
-        { uri: selected.uri, range: selected.range },
-        outputChannel
-      );
+        outputChannel.appendLine(
+          `OMN: Navigated to ${selected.uri.fsPath}:${position.line + 1}:${
+            position.character + 1
+          }`
+        );
+      })();
     }
-
-    editorChangeDisposable.dispose();
     quickPick.hide();
   });
 
-  // Clean up when quickpick is hidden
+  // Cleanup
   quickPick.onDidHide(async () => {
-    if (quickPickActive) {
-      // Only do this if not already handled in onDidAccept
-      quickPickActive = false;
-
-      // Close preview editor if open
-      const openEditors = vscode.window.visibleTextEditors;
-      for (const editor of openEditors) {
-        if (editor.document.uri.scheme === PREVIEW_SCHEME) {
-          await vscode.commands.executeCommand(
-            "workbench.action.closeActiveEditor"
-          );
-          break;
-        }
-      }
-
-      // Restore original editor if we didn't select anything
-      if (originalEditor && originalEditor.document) {
-        vscode.window.showTextDocument(originalEditor.document, {
-          viewColumn: originalEditor.viewColumn,
-          selection: originalEditor.selection,
-          preview: false,
-        });
-      }
-    }
-
-    // Always clean up resources
-    editorChangeDisposable.dispose();
-
-    // Restore original preview setting
-    vscode.workspace
-      .getConfiguration("workbench.editor")
-      .update(
-        "enablePreviewFromQuickOpen",
-        originalPreviewSetting,
-        vscode.ConfigurationTarget.Global
-      );
+    await previewManager.dispose();
+    quickPick.dispose();
   });
 }
 
-// Function to navigate to a specific location
 async function navigateToLocation(
   location: vscode.Location,
   outputChannel: vscode.OutputChannel
-) {
-  // Verify location has valid properties
-  if (!location || !location.uri || !location.range) {
-    outputChannel.appendLine(`Error: Invalid location provided`);
-    return;
-  }
+): Promise<void> {
+  const doc = await vscode.workspace.openTextDocument(location.uri);
+  const editor = await vscode.window.showTextDocument(doc, {
+    viewColumn: vscode.ViewColumn.Active,
+  });
 
-  // Log debugging information
+  const position = location.range.start;
+  const selection = new vscode.Selection(position, position);
+  editor.selection = selection;
+  editor.revealRange(location.range, vscode.TextEditorRevealType.InCenter);
+
   outputChannel.appendLine(
-    `Navigating to location at ${location.uri.fsPath}:${
-      location.range.start.line + 1
-    }:${location.range.start.character}`
+    `OMN: Navigated to ${location.uri.fsPath}:${position.line + 1}:${
+      position.character + 1
+    }`
   );
-
-  try {
-    // Open the document at the exact location using the revealRange command
-    await vscode.commands.executeCommand("vscode.open", location.uri, {
-      selection: location.range,
-      viewColumn: vscode.ViewColumn.Active,
-      preserveFocus: false,
-    });
-
-    // Ensure the editor is focused and the range is visible
-    const editor = vscode.window.activeTextEditor;
-    if (editor) {
-      // Create a more precise selection at the location
-      const position = new vscode.Position(
-        location.range.start.line,
-        location.range.start.character
-      );
-
-      // Set selection and ensure it's visible in the center
-      editor.selection = new vscode.Selection(position, position);
-      editor.revealRange(location.range, vscode.TextEditorRevealType.InCenter);
-    }
-  } catch (err) {
-    console.error("Failed to navigate to location:", err);
-    outputChannel.appendLine(`Error navigating to location: ${err}`);
-  }
 }
 
 export function registerGoToReferencesCommand(
   context: vscode.ExtensionContext,
   recencyTracker: RecencyTracker,
   outputChannel: vscode.OutputChannel
-) {
-  // Register go to references command
+): void {
   const goToReferences = vscode.commands.registerCommand(
     "omn.goToReferences",
     async () => {
-      await navigateToSymbolLocations("references", outputChannel);
+      await navigateToSymbolLocations(
+        "references",
+        outputChannel,
+        recencyTracker
+      );
     }
   );
 
-  // Register go to definition command
   const goToDefinition = vscode.commands.registerCommand(
     "omn.goToDefinition",
     async () => {
-      await navigateToSymbolLocations("definition", outputChannel);
+      await navigateToSymbolLocations(
+        "definition",
+        outputChannel,
+        recencyTracker
+      );
     }
   );
 
-  // Register go to implementation command
   const goToImplementation = vscode.commands.registerCommand(
     "omn.goToImplementation",
     async () => {
-      await navigateToSymbolLocations("implementation", outputChannel);
+      await navigateToSymbolLocations(
+        "implementation",
+        outputChannel,
+        recencyTracker
+      );
     }
   );
 
-  // Register go to type definition command
   const goToTypeDefinition = vscode.commands.registerCommand(
     "omn.goToTypeDefinition",
     async () => {
-      await navigateToSymbolLocations("typeDefinition", outputChannel);
+      await navigateToSymbolLocations(
+        "typeDefinition",
+        outputChannel,
+        recencyTracker
+      );
     }
   );
 
-  // Add all commands to subscriptions
   context.subscriptions.push(
     goToReferences,
     goToDefinition,
