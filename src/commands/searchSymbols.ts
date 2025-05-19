@@ -5,7 +5,11 @@ import {
   getLanguageIdFromFilePath,
   symbolTypeToIcon,
 } from "../utils/symbolSearch";
-import { PREVIEW_SCHEME, getSymbolPreviewUri } from "../utils/symbolPreview";
+import {
+  PREVIEW_SCHEME,
+  getSymbolPreviewUri,
+  PreviewManager,
+} from "../utils/symbolPreview";
 import { RecencyTracker } from "../utils/recencyTracker";
 import { LastCommandTracker } from "../utils/lastCommandTracker";
 
@@ -52,19 +56,9 @@ export function registerSearchSymbolsCommand(
 
       const rootPath = workspaceFolders[0].uri.fsPath;
 
-      const originalEditor = vscode.window.activeTextEditor;
-
-      const originalPreviewSetting = vscode.workspace
-        .getConfiguration("workbench.editor")
-        .get("enablePreviewFromQuickOpen");
-
-      await vscode.workspace
-        .getConfiguration("workbench.editor")
-        .update(
-          "enablePreviewFromQuickOpen",
-          true,
-          vscode.ConfigurationTarget.Global
-        );
+      // Create our preview manager and initialize it
+      const previewManager = new PreviewManager(outputChannel);
+      await previewManager.init();
 
       const symbolTypes = [
         { label: "All", value: "all" },
@@ -86,7 +80,10 @@ export function registerSearchSymbolsCommand(
           placeHolder: "Select symbol type to search",
         });
       }
-      if (!picked) return;
+      if (!picked) {
+        await previewManager.dispose(); // Clean up if user cancels
+        return;
+      }
 
       const cacheKey = getCacheKey(picked.value, rootPath);
 
@@ -197,7 +194,6 @@ export function registerSearchSymbolsCommand(
       };
       void backgroundSearch();
 
-      let isPreviewingFile = false;
       let quickPickActive = true;
 
       const editorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(
@@ -251,46 +247,11 @@ export function registerSearchSymbolsCommand(
         if (selected && selected.description) {
           try {
             const filePath = path.join(rootPath, selected.description);
-
-            const line = selected.line;
-            const langId = getLanguageIdFromFilePath(filePath);
-            const previewUri = getSymbolPreviewUri(filePath, line, langId);
-
-            const doc = await vscode.workspace.openTextDocument(previewUri);
-            await vscode.languages.setTextDocumentLanguage(doc, langId);
-            const previewEditor = await vscode.window.showTextDocument(doc, {
-              viewColumn: vscode.ViewColumn.Active,
-              preview: true,
-              preserveFocus: true,
-            });
-
-            const range = new vscode.Range(
-              line - 1,
-              selected.startColumn - 1,
-              line - 1,
-              selected.startColumn - 1
-            );
-
-            previewEditor.selection = new vscode.Selection(
-              line - 1,
-              selected.startColumn - 1,
-              line - 1,
-              selected.startColumn - 1
-            );
-            previewEditor.revealRange(
-              range,
-              vscode.TextEditorRevealType.InCenter
-            );
-            const decoration = vscode.window.createTextEditorDecorationType({
-              backgroundColor: new vscode.ThemeColor(
-                "editor.findMatchHighlightBackground"
-              ),
-              isWholeLine: true,
-            });
-            previewEditor.setDecorations(decoration, [range]);
-
-            outputChannel.appendLine(
-              `OMN: Shown preview for: ${selected.label} at line: ${selected.line} at column: ${selected.startColumn} to ${selected.endColumn}`
+            await previewManager.showFile(
+              filePath,
+              selected.line,
+              selected.startColumn,
+              selected.endColumn
             );
           } catch (err) {
             console.error("Failed to preview file:", err);
@@ -301,15 +262,6 @@ export function registerSearchSymbolsCommand(
       quickPick.onDidAccept(async () => {
         const selected = quickPick.selectedItems[0];
         if (selected) {
-          if (
-            vscode.window.activeTextEditor &&
-            vscode.window.activeTextEditor.document.uri.scheme ===
-              PREVIEW_SCHEME
-          ) {
-            await vscode.commands.executeCommand(
-              "workbench.action.closeActiveEditor"
-            );
-          }
           if (selected.file && selected.label) {
             await recencyTracker.recordAccess(selected.file, selected.label);
           }
@@ -334,36 +286,14 @@ export function registerSearchSymbolsCommand(
           editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
         }
         editorChangeDisposable.dispose();
+        await previewManager.dispose();
         quickPick.hide();
       });
 
       quickPick.onDidHide(async () => {
         quickPickActive = false;
         editorChangeDisposable.dispose();
-        const openEditors = vscode.window.visibleTextEditors;
-        for (const editor of openEditors) {
-          if (editor.document.uri.scheme === PREVIEW_SCHEME) {
-            await vscode.commands.executeCommand(
-              "workbench.action.closeActiveEditor"
-            );
-            break;
-          }
-        }
-        vscode.workspace
-          .getConfiguration("workbench.editor")
-          .update(
-            "enablePreviewFromQuickOpen",
-            originalPreviewSetting,
-            vscode.ConfigurationTarget.Global
-          );
-
-        if (originalEditor && originalEditor.document) {
-          vscode.window.showTextDocument(originalEditor.document, {
-            viewColumn: originalEditor.viewColumn,
-            selection: originalEditor.selection,
-            preview: false,
-          });
-        }
+        await previewManager.dispose();
       });
     }
   );
