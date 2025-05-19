@@ -7,7 +7,7 @@ export function registerResumeCommand(
   outputChannel: vscode.OutputChannel
 ) {
   const resumeCommand = vscode.commands.registerCommand(
-    "olly.resumeLastCommand",
+    "omn.resumeLastCommand",
     async () => {
       const lastCommand = await lastCommandTracker.getLastCommand();
 

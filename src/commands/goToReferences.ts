@@ -422,7 +422,7 @@ export function registerGoToReferencesCommand(
 ) {
   // Register go to references command
   const goToReferences = vscode.commands.registerCommand(
-    "olly.goToReferences",
+    "omn.goToReferences",
     async () => {
       await navigateToSymbolLocations("references", outputChannel);
     }
@@ -430,7 +430,7 @@ export function registerGoToReferencesCommand(
 
   // Register go to definition command
   const goToDefinition = vscode.commands.registerCommand(
-    "olly.goToDefinition",
+    "omn.goToDefinition",
     async () => {
       await navigateToSymbolLocations("definition", outputChannel);
     }
@@ -438,7 +438,7 @@ export function registerGoToReferencesCommand(
 
   // Register go to implementation command
   const goToImplementation = vscode.commands.registerCommand(
-    "olly.goToImplementation",
+    "omn.goToImplementation",
     async () => {
       await navigateToSymbolLocations("implementation", outputChannel);
     }
@@ -446,7 +446,7 @@ export function registerGoToReferencesCommand(
 
   // Register go to type definition command
   const goToTypeDefinition = vscode.commands.registerCommand(
-    "olly.goToTypeDefinition",
+    "omn.goToTypeDefinition",
     async () => {
       await navigateToSymbolLocations("typeDefinition", outputChannel);
     }

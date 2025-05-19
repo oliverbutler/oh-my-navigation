@@ -4,7 +4,7 @@ import * as fs from "fs";
 
 export function registerSwapToSiblingCommand(context: vscode.ExtensionContext) {
   const swapToSibling = vscode.commands.registerCommand(
-    "olly.swapToSibling",
+    "omn.swapToSibling",
     async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {

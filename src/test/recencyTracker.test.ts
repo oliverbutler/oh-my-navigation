@@ -38,7 +38,7 @@ describe("RecencyTracker", () => {
     await tracker.load();
 
     expect(mockContext.globalState.get).toHaveBeenCalledWith(
-      "olly.recencyEntries",
+      "omn.recencyEntries",
       {}
     );
   });
@@ -52,7 +52,7 @@ describe("RecencyTracker", () => {
     expect(mockContext.globalState.update).toHaveBeenCalled();
     const updateCall = (mockContext.globalState.update as jest.Mock).mock
       .calls[0];
-    expect(updateCall[0]).toBe("olly.recencyEntries");
+    expect(updateCall[0]).toBe("omn.recencyEntries");
 
     // Should contain our entry
     const entries = updateCall[1];
@@ -186,7 +186,7 @@ describe("RecencyTracker", () => {
     await tracker.clear();
 
     expect(mockContext.globalState.update).toHaveBeenCalledWith(
-      "olly.recencyEntries",
+      "omn.recencyEntries",
       {}
     );
   });

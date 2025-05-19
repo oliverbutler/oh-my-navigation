@@ -26,7 +26,7 @@ export class LastCommandTracker {
       args,
     };
 
-    await this.context.globalState.update("olly.lastCommand", commandData);
+    await this.context.globalState.update("omn.lastCommand", commandData);
   }
 
   /**
@@ -34,13 +34,13 @@ export class LastCommandTracker {
    * @returns The last command or undefined if none exists
    */
   async getLastCommand(): Promise<CommandData | undefined> {
-    return this.context.globalState.get<CommandData>("olly.lastCommand");
+    return this.context.globalState.get<CommandData>("omn.lastCommand");
   }
 
   /**
    * Clear the stored last command
    */
   async clear(): Promise<void> {
-    await this.context.globalState.update("olly.lastCommand", undefined);
+    await this.context.globalState.update("omn.lastCommand", undefined);
   }
 }

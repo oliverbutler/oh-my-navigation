@@ -37,7 +37,7 @@ export class RecencyTracker {
 
     const storedEntries = this.context.globalState.get<
       Record<string, RecencyEntry>
-    >("olly.recencyEntries", {});
+    >("omn.recencyEntries", {});
     this.entries = new Map(Object.entries(storedEntries));
     this.loaded = true;
   }
@@ -49,7 +49,7 @@ export class RecencyTracker {
     if (!this.loaded) return;
 
     const entries = Object.fromEntries(this.entries.entries());
-    await this.context.globalState.update("olly.recencyEntries", entries);
+    await this.context.globalState.update("omn.recencyEntries", entries);
   }
 
   /**
@@ -162,6 +162,6 @@ export class RecencyTracker {
    */
   async clear(): Promise<void> {
     this.entries.clear();
-    await this.context.globalState.update("olly.recencyEntries", {});
+    await this.context.globalState.update("omn.recencyEntries", {});
   }
 }

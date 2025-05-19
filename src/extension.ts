@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
   registerRipgrepSearchCommand(context, recencyTracker, outputChannel);
   registerResumeCommand(context, lastCommandTracker, outputChannel);
 
-  const showLogs = vscode.commands.registerCommand("olly.showLogs", () => {
+  const showLogs = vscode.commands.registerCommand("omn.showLogs", () => {
     outputChannel.show();
   });
 
@@ -44,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(providerRegistration);
 
   const clearRecencyData = vscode.commands.registerCommand(
-    "olly.clearRecencyData",
+    "omn.clearRecencyData",
     async () => {
       await recencyTracker.clear();
       vscode.window.showInformationMessage("Recency data cleared");

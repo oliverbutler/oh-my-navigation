@@ -32,14 +32,14 @@ export function registerSearchSymbolsCommand(
   lastCommandTracker?: LastCommandTracker
 ) {
   const searchSymbols = vscode.commands.registerCommand(
-    "olly.searchSymbols",
+    "omn.searchSymbols",
     async (typeArg?: string, searchValue?: string) => {
       // Store this command as the last executed command
       if (lastCommandTracker) {
         const args = [];
         if (typeArg) args.push(typeArg);
         if (searchValue) args.push(searchValue);
-        await lastCommandTracker.setLastCommand("olly.searchSymbols", args);
+        await lastCommandTracker.setLastCommand("omn.searchSymbols", args);
       }
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
@@ -211,7 +211,7 @@ export function registerSearchSymbolsCommand(
 
         // Update last command with current type and search value
         if (lastCommandTracker && picked) {
-          lastCommandTracker.setLastCommand("olly.searchSymbols", [
+          lastCommandTracker.setLastCommand("omn.searchSymbols", [
             picked.value,
             value,
           ]);

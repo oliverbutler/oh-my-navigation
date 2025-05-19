@@ -485,7 +485,7 @@ export function registerRipgrepSearchCommand(
 ) {
   // Register ripgrep search command
   const ripgrepSearch = vscode.commands.registerCommand(
-    "olly.ripgrepSearch",
+    "omn.ripgrepSearch",
     async () => {
       await searchWithRipgrepCommand(outputChannel);
     }
