@@ -7,6 +7,7 @@ import {
 } from "../utils/symbolSearch";
 import { PREVIEW_SCHEME, getSymbolPreviewUri } from "../utils/symbolPreview";
 import { RecencyTracker } from "../utils/recencyTracker";
+import { LastCommandTracker } from "../utils/lastCommandTracker";
 
 // Define a custom type for symbol items
 interface SymbolQuickPickItem extends vscode.QuickPickItem {
@@ -27,11 +28,19 @@ function getCacheKey(type: string, rootPath: string) {
 export function registerSearchSymbolsCommand(
   context: vscode.ExtensionContext,
   recencyTracker: RecencyTracker,
-  outputChannel: vscode.OutputChannel
+  outputChannel: vscode.OutputChannel,
+  lastCommandTracker?: LastCommandTracker
 ) {
   const searchSymbols = vscode.commands.registerCommand(
     "olly.searchSymbols",
-    async (typeArg?: string) => {
+    async (typeArg?: string, searchValue?: string) => {
+      // Store this command as the last executed command
+      if (lastCommandTracker) {
+        const args = [];
+        if (typeArg) args.push(typeArg);
+        if (searchValue) args.push(searchValue);
+        await lastCommandTracker.setLastCommand("olly.searchSymbols", args);
+      }
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
         vscode.window.showInformationMessage("No workspace open");
@@ -112,6 +121,12 @@ export function registerSearchSymbolsCommand(
       quickPick.matchOnDescription = false;
       quickPick.matchOnDetail = false;
       quickPick.placeholder = "Search symbols";
+
+      // Set initial value if provided from resume
+      if (searchValue) {
+        quickPick.value = searchValue;
+      }
+
       quickPick.show();
       const { Fzf } = await import("fzf");
       let fzf = new Fzf(itemsForSearch, {
@@ -193,6 +208,15 @@ export function registerSearchSymbolsCommand(
           quickPick.items = itemsForSearch;
           return;
         }
+
+        // Update last command with current type and search value
+        if (lastCommandTracker && picked) {
+          lastCommandTracker.setLastCommand("olly.searchSymbols", [
+            picked.value,
+            value,
+          ]);
+        }
+
         const results = fzf.find(value);
         if (results.length === 0) {
           quickPick.items = [];

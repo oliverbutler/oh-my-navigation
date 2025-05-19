@@ -1,7 +1,7 @@
 {
-  "name": "olly",
-  "displayName": "olly",
-  "description": "custom extension to make my editor better",
+  "name": "oh-my-navigation",
+  "displayName": "Oh My Navigation",
+  "description": "Make navigation in VSCode better",
   "version": "0.0.1",
   "license": "MIT",
   "engines": {
@@ -12,48 +12,52 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/oliverbutler/olly-extension"
+    "url": "https://github.com/oliverbutler/oh-my-navigation"
   },
   "activationEvents": [],
   "main": "./dist/extension.js",
-  "publisher": "olly",
+  "publisher": "oliverbutler",
   "contributes": {
     "commands": [
       {
-        "command": "olly.swapToSibling",
-        "title": "Olly: Swap to Sibling"
+        "command": "omn.swapToSibling",
+        "title": "OMN: Swap to Sibling"
       },
       {
-        "command": "olly.searchSymbols",
-        "title": "Olly: Search Symbols"
+        "command": "omn.resumeLastCommand",
+        "title": "OMN: Resume Last Command"
       },
       {
-        "command": "olly.goToReferences",
-        "title": "Olly: Go to References"
+        "command": "omn.searchSymbols",
+        "title": "OMN: Search Symbols"
       },
       {
-        "command": "olly.goToDefinition",
-        "title": "Olly: Go to Definition"
+        "command": "omn.goToReferences",
+        "title": "OMN: Go to References"
       },
       {
-        "command": "olly.goToImplementation",
-        "title": "Olly: Go to Implementation"
+        "command": "omn.goToDefinition",
+        "title": "OMN: Go to Definition"
       },
       {
-        "command": "olly.goToTypeDefinition",
-        "title": "Olly: Go to Type Definition"
+        "command": "omn.goToImplementation",
+        "title": "OMN: Go to Implementation"
       },
       {
-        "command": "olly.ripgrepSearch",
-        "title": "Olly: Ripgrep Search Word Under Cursor"
+        "command": "omn.goToTypeDefinition",
+        "title": "OMN: Go to Type Definition"
       },
       {
-        "command": "olly.clearRecencyData",
-        "title": "Olly: Clear Recency Data"
+        "command": "omn.ripgrepSearch",
+        "title": "OMN: Ripgrep Search Word Under Cursor"
       },
       {
-        "command": "olly.showLogs",
-        "title": "Olly: Show Debug Logs"
+        "command": "omn.clearRecencyData",
+        "title": "OMN: Clear Recency Data"
+      },
+      {
+        "command": "omn.showLogs",
+        "title": "OMN: Show Debug Logs"
       }
     ]
   },

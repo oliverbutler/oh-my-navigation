@@ -1,12 +1,15 @@
 import * as vscode from "vscode";
 import { PREVIEW_SCHEME, previewProvider } from "./utils/symbolPreview";
 import { RecencyTracker } from "./utils/recencyTracker";
+import { LastCommandTracker } from "./utils/lastCommandTracker";
 import { registerSearchSymbolsCommand } from "./commands/searchSymbols";
 import { registerSwapToSiblingCommand } from "./commands/swapToSibling";
 import { registerGoToReferencesCommand } from "./commands/goToReferences";
 import { registerRipgrepSearchCommand } from "./commands/ripgrepSearch";
+import { registerResumeCommand } from "./commands/resumeCommand";
 
 let recencyTracker: RecencyTracker;
+let lastCommandTracker: LastCommandTracker;
 
 let outputChannel: vscode.OutputChannel;
 
@@ -16,11 +19,18 @@ export function activate(context: vscode.ExtensionContext) {
   outputChannel.appendLine("Olly extension activated");
 
   recencyTracker = new RecencyTracker(context);
+  lastCommandTracker = new LastCommandTracker(context);
 
-  registerSearchSymbolsCommand(context, recencyTracker, outputChannel);
+  registerSearchSymbolsCommand(
+    context,
+    recencyTracker,
+    outputChannel,
+    lastCommandTracker
+  );
   registerSwapToSiblingCommand(context);
   registerGoToReferencesCommand(context, recencyTracker, outputChannel);
   registerRipgrepSearchCommand(context, recencyTracker, outputChannel);
+  registerResumeCommand(context, lastCommandTracker, outputChannel);
 
   const showLogs = vscode.commands.registerCommand("olly.showLogs", () => {
     outputChannel.show();
