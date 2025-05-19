@@ -83,7 +83,7 @@ describe("RecencyTracker", () => {
   });
 
   test("getScore should return 0 for unknown entries", async () => {
-    const result = await tracker.getScore("/unknown/path", "unknownSymbol");
+    const result = tracker.getScore("/unknown/path", "unknownSymbol");
 
     expect(result.score).toBe(0);
     expect(result.accessCount).toBe(0);
@@ -105,7 +105,7 @@ describe("RecencyTracker", () => {
 
     (mockContext.globalState.get as jest.Mock).mockReturnValue(recentMockData);
 
-    const recentScore = await tracker.getScore(filePath, symbolName);
+    const recentScore = tracker.getScore(filePath, symbolName);
 
     // Should have a high score due to recency and frequency
     expect(recentScore.score).toBeGreaterThan(0);
@@ -127,7 +127,7 @@ describe("RecencyTracker", () => {
     };
 
     (mockContext.globalState.get as jest.Mock).mockReturnValue(recentMockData);
-    const recentScore = await tracker.getScore(filePath, symbolName);
+    const recentScore = tracker.getScore(filePath, symbolName);
 
     // Test with a much older file (same access count)
     const oldMockData = {
@@ -139,7 +139,7 @@ describe("RecencyTracker", () => {
     };
 
     (mockContext.globalState.get as jest.Mock).mockReturnValue(oldMockData);
-    const oldScore = await tracker.getScore(filePath, symbolName);
+    const oldScore = tracker.getScore(filePath, symbolName);
 
     // Recent should have higher score with same access count
     // Use toBeGreaterThanOrEqual to account for potential rounding effects
@@ -161,7 +161,7 @@ describe("RecencyTracker", () => {
     };
 
     (mockContext.globalState.get as jest.Mock).mockReturnValue(lowFreqMockData);
-    const lowFreqScore = await tracker.getScore(filePath, symbolName);
+    const lowFreqScore = tracker.getScore(filePath, symbolName);
 
     // Test with much higher frequency
     const highFreqMockData = {
@@ -175,7 +175,7 @@ describe("RecencyTracker", () => {
     (mockContext.globalState.get as jest.Mock).mockReturnValue(
       highFreqMockData
     );
-    const highFreqScore = await tracker.getScore(filePath, symbolName);
+    const highFreqScore = tracker.getScore(filePath, symbolName);
 
     // Higher frequency should increase score
     // Use toBeGreaterThanOrEqual to account for potential rounding effects

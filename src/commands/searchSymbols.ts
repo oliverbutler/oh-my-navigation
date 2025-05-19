@@ -11,10 +11,12 @@ import { LastCommandTracker } from "../utils/lastCommandTracker";
 
 // Define a custom type for symbol items
 interface SymbolQuickPickItem extends vscode.QuickPickItem {
-  iconPath?: vscode.ThemeIcon;
-  file?: string;
-  line?: number;
-  score?: number;
+  iconPath: vscode.ThemeIcon;
+  file: string;
+  line: number;
+  score: number;
+  startColumn: number; // start of the symbol
+  endColumn: number; // end of the symbol
 }
 
 // Stale-while-revalidate cache for symbol search results
@@ -41,16 +43,21 @@ export function registerSearchSymbolsCommand(
         if (searchValue) args.push(searchValue);
         await lastCommandTracker.setLastCommand("omn.searchSymbols", args);
       }
+
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
         vscode.window.showInformationMessage("No workspace open");
         return;
       }
+
       const rootPath = workspaceFolders[0].uri.fsPath;
+
       const originalEditor = vscode.window.activeTextEditor;
+
       const originalPreviewSetting = vscode.workspace
         .getConfiguration("workbench.editor")
         .get("enablePreviewFromQuickOpen");
+
       await vscode.workspace
         .getConfiguration("workbench.editor")
         .update(
@@ -58,6 +65,7 @@ export function registerSearchSymbolsCommand(
           true,
           vscode.ConfigurationTarget.Global
         );
+
       const symbolTypes = [
         { label: "All", value: "all" },
         { label: "Classes", value: "class" },
@@ -69,8 +77,9 @@ export function registerSearchSymbolsCommand(
         { label: "Zod Schemas", value: "zod" },
         { label: "React Components", value: "react" },
       ];
+
       let picked;
-      if (typeArg && symbolTypes.some((t) => t.value === typeArg)) {
+      if (typeArg) {
         picked = symbolTypes.find((t) => t.value === typeArg);
       } else {
         picked = await vscode.window.showQuickPick(symbolTypes, {
@@ -78,35 +87,35 @@ export function registerSearchSymbolsCommand(
         });
       }
       if (!picked) return;
+
       const cacheKey = getCacheKey(picked.value, rootPath);
+
       let itemsForSearch: SymbolQuickPickItem[] = [];
-      if (symbolCache[cacheKey]) {
-        itemsForSearch = [...symbolCache[cacheKey]];
-        const scoreItems = itemsForSearch.map((item) => ({
-          filePath: item.file!,
-          symbolName: item.label,
-        }));
-        const scores = await recencyTracker.getScores(scoreItems);
-        for (const item of itemsForSearch) {
-          const key = `${item.file}#${item.label}`;
-          const score = scores.get(key);
-          if (score) {
-            item.score = score.score;
-          }
-        }
-        itemsForSearch.sort((a, b) => {
-          const scoreA = a.score || 0;
-          const scoreB = b.score || 0;
-          if (scoreB !== scoreA) return scoreB - scoreA;
-          if (a.label !== b.label) return a.label.localeCompare(b.label);
-          if ((a.description || "") !== (b.description || ""))
-            return (a.description || "").localeCompare(b.description || "");
-          return (a.line || 0) - (b.line || 0);
-        });
+
+      const fromCache = symbolCache[cacheKey];
+
+      await recencyTracker.load();
+
+      if (fromCache) {
+        const cachedItemsWithLatestScores: SymbolQuickPickItem[] =
+          fromCache.map((item) => {
+            const score = recencyTracker.getScore(item.file, item.label);
+
+            return {
+              ...item,
+              score: score?.score ?? 0,
+            };
+          });
+
+        cachedItemsWithLatestScores.sort(compareSymbolQuickPickItems);
+
+        itemsForSearch = cachedItemsWithLatestScores;
       }
+
       const quickPick = vscode.window.createQuickPick<SymbolQuickPickItem>();
+
       if (itemsForSearch.length > 0) {
-        quickPick.items = itemsForSearch.slice(0, 50);
+        quickPick.items = itemsForSearch.slice(0, 20);
         quickPick.busy = true;
       } else {
         quickPick.items = [
@@ -114,7 +123,7 @@ export function registerSearchSymbolsCommand(
             label: "$(sync~spin) Loading symbols...",
             description: "",
             alwaysShow: true,
-          },
+          } as SymbolQuickPickItem,
         ];
         quickPick.busy = true;
       }
@@ -122,80 +131,76 @@ export function registerSearchSymbolsCommand(
       quickPick.matchOnDetail = false;
       quickPick.placeholder = "Search symbols";
 
-      // Set initial value if provided from resume
       if (searchValue) {
         quickPick.value = searchValue;
       }
 
       quickPick.show();
       const { Fzf } = await import("fzf");
+
       let fzf = new Fzf(itemsForSearch, {
         selector: (item) => item.label,
         casing: "smart-case",
         limit: 20,
       });
+
       const backgroundSearch = async () => {
         const symbols = await findSymbols(picked.value, rootPath);
+
         if (symbols.length === 0) {
           quickPick.items = [
             {
               label: "No symbols found.",
               description: "",
               alwaysShow: true,
-            },
+            } as SymbolQuickPickItem,
           ];
           quickPick.busy = false;
           symbolCache[cacheKey] = [];
           return;
         }
+
+        await recencyTracker.load();
+
         const freshItems: SymbolQuickPickItem[] = symbols.map((item) => {
           const relativePath = item.file.startsWith(rootPath)
             ? item.file.substring(rootPath.length + 1)
             : item.file;
+
+          const score = recencyTracker.getScore(item.file, item.symbol);
+
           return {
             label: item.symbol,
             description: relativePath,
             iconPath: new vscode.ThemeIcon(symbolTypeToIcon[item.type]),
             file: item.file,
             line: item.line,
+            score: score.score,
+            startColumn: item.startColumn,
+            endColumn: item.endColumn,
           };
         });
-        const scoreItems = freshItems.map((item) => ({
-          filePath: item.file!,
-          symbolName: item.label,
-        }));
-        const scores = await recencyTracker.getScores(scoreItems);
-        for (const item of freshItems) {
-          const key = `${item.file}#${item.label}`;
-          const score = scores.get(key);
-          if (score) {
-            item.score = score.score;
-          }
-        }
-        freshItems.sort((a, b) => {
-          const scoreA = a.score || 0;
-          const scoreB = b.score || 0;
-          if (scoreB !== scoreA) return scoreB - scoreA;
-          if (a.label !== b.label) return a.label.localeCompare(b.label);
-          if ((a.description || "") !== (b.description || ""))
-            return (a.description || "").localeCompare(b.description || "");
-          return (a.line || 0) - (b.line || 0);
-        });
+
+        freshItems.sort(compareSymbolQuickPickItems);
+
         symbolCache[cacheKey] = freshItems;
         itemsForSearch = freshItems;
-        if (!quickPick.busy) return;
+
         fzf = new Fzf(itemsForSearch, {
           selector: (item) => item.label,
           casing: "smart-case",
           limit: 20,
         });
+
         quickPick.items = freshItems.slice(0, 20);
         quickPick.busy = false;
       };
       void backgroundSearch();
+
       let lastSelectedItem: SymbolQuickPickItem | undefined;
       let isPreviewingFile = false;
       let quickPickActive = true;
+
       const editorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(
         () => {
           if (quickPickActive) {
@@ -203,6 +208,7 @@ export function registerSearchSymbolsCommand(
           }
         }
       );
+
       quickPick.onDidChangeValue((value) => {
         if (!value) {
           quickPick.items = itemsForSearch;
@@ -223,22 +229,22 @@ export function registerSearchSymbolsCommand(
           return;
         }
         const maxFzfScore = Math.max(...results.map((r) => r.score));
+
         const enrichedResults: SymbolQuickPickItem[] = results.map((result) => {
           const recencyScore = result.item.score || 0;
           const normalizedFzfScore = (result.score / maxFzfScore) * 100;
           const combinedScore = normalizedFzfScore * 0.6 + recencyScore * 0.4;
+
           return {
             ...result.item,
-            label: `${result.item.label}`,
-            alwaysShow: true,
             score: combinedScore,
           };
         });
-        const sortedResults = enrichedResults.sort(
-          (a, b) => (b.score ?? 0) - (a.score ?? 0)
-        );
+
+        const sortedResults = enrichedResults.sort(compareSymbolQuickPickItems);
+
         outputChannel.appendLine(
-          `Olly: '${picked.label}' first 4 items: ${JSON.stringify(
+          `OMN: '${picked.label}' first 4 items: ${JSON.stringify(
             sortedResults
               .map((r) => `${r.label} score: ${r.score?.toFixed(1)}`)
               .slice(0, 4)
@@ -246,8 +252,9 @@ export function registerSearchSymbolsCommand(
         );
         quickPick.items = sortedResults;
       });
+
       quickPick.onDidChangeActive(async (items) => {
-        const selected = items[0] as SymbolQuickPickItem;
+        const selected = items[0];
         if (
           selected &&
           selected !== lastSelectedItem &&
@@ -269,12 +276,19 @@ export function registerSearchSymbolsCommand(
               preserveFocus: true,
             });
             const linePosition = line - 1;
-            const range = new vscode.Range(linePosition, 0, linePosition, 0);
+
+            const range = new vscode.Range(
+              linePosition,
+              selected.startColumn,
+              linePosition,
+              selected.endColumn
+            );
+
             previewEditor.selection = new vscode.Selection(
               linePosition,
-              0,
+              selected.startColumn,
               linePosition,
-              0
+              selected.endColumn
             );
             previewEditor.revealRange(
               range,
@@ -296,8 +310,9 @@ export function registerSearchSymbolsCommand(
           }
         }
       });
+
       quickPick.onDidAccept(async () => {
-        const selected = quickPick.selectedItems[0] as SymbolQuickPickItem;
+        const selected = quickPick.selectedItems[0];
         if (selected) {
           if (
             vscode.window.activeTextEditor &&
@@ -320,7 +335,7 @@ export function registerSearchSymbolsCommand(
             viewColumn: vscode.ViewColumn.Active,
           });
           const line = (selected.line ?? 1) - 1;
-          const pos = new vscode.Position(line, 0);
+          const pos = new vscode.Position(line, selected.startColumn);
           editor.selection = new vscode.Selection(pos, pos);
           editor.revealRange(
             new vscode.Range(pos, pos),
@@ -330,6 +345,7 @@ export function registerSearchSymbolsCommand(
         editorChangeDisposable.dispose();
         quickPick.hide();
       });
+
       quickPick.onDidHide(async () => {
         quickPickActive = false;
         editorChangeDisposable.dispose();
@@ -349,6 +365,7 @@ export function registerSearchSymbolsCommand(
             originalPreviewSetting,
             vscode.ConfigurationTarget.Global
           );
+
         if (originalEditor && originalEditor.document) {
           vscode.window.showTextDocument(originalEditor.document, {
             viewColumn: originalEditor.viewColumn,
@@ -361,3 +378,30 @@ export function registerSearchSymbolsCommand(
   );
   context.subscriptions.push(searchSymbols);
 }
+
+const compareSymbolQuickPickItems = (
+  a: SymbolQuickPickItem,
+  b: SymbolQuickPickItem
+) => {
+  // First compare by score (higher scores first)
+  const scoreA = a.score || 0;
+  const scoreB = b.score || 0;
+  if (scoreB !== scoreA) {
+    return scoreB - scoreA;
+  }
+
+  // Then alphabetically by label
+  if (a.label !== b.label) {
+    return a.label.localeCompare(b.label);
+  }
+
+  // Then by description if present
+  const descriptionA = a.description || "";
+  const descriptionB = b.description || "";
+  if (descriptionA !== descriptionB) {
+    return descriptionA.localeCompare(descriptionB);
+  }
+
+  // Finally by line number
+  return (a.line || 0) - (b.line || 0);
+};

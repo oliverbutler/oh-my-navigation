@@ -86,9 +86,7 @@ export class RecencyTracker {
    * @param filePath The file path
    * @param symbolName Optional symbol name
    */
-  async getScore(filePath: string, symbolName?: string): Promise<SymbolScore> {
-    await this.load();
-
+  getScore(filePath: string, symbolName?: string): SymbolScore {
     const key = symbolName ? `${filePath}#${symbolName}` : filePath;
     const entry = this.entries.get(key);
 
@@ -122,18 +120,13 @@ export class RecencyTracker {
    * Get scores for multiple items
    * @param items Array of file paths or file+symbol combinations
    */
-  async getScores(
-    items: { filePath: string; symbolName?: string }[]
-  ): Promise<Map<string, SymbolScore>> {
-    await this.load();
+  getScores(keys: string[]): Map<string, SymbolScore> {
+    this.load();
 
     const scores = new Map<string, SymbolScore>();
 
-    for (const item of items) {
-      const key = item.symbolName
-        ? `${item.filePath}#${item.symbolName}`
-        : item.filePath;
-      const score = await this.getScore(item.filePath, item.symbolName);
+    for (const key of keys) {
+      const score = this.getScore(key);
       scores.set(key, score);
     }
 

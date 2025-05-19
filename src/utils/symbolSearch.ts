@@ -227,7 +227,16 @@ export function getLanguageIdFromFilePath(filePath: string): string {
 export async function findSymbols(
   symbolType: string,
   rootPath: string
-): Promise<{ symbol: string; file: string; line: number; type: SymbolType }[]> {
+): Promise<
+  {
+    symbol: string;
+    file: string;
+    line: number;
+    type: SymbolType;
+    startColumn: number;
+    endColumn: number;
+  }[]
+> {
   let searchSet: SymbolPattern[] = [];
 
   if (symbolType === "all") {
@@ -254,6 +263,8 @@ export async function findSymbols(
     file: string;
     line: number;
     type: SymbolType;
+    startColumn: number;
+    endColumn: number;
   }[] = [];
 
   for (const search of searchSet) {
@@ -269,11 +280,21 @@ export async function findSymbols(
 
         if (search.ignore?.includes(symbol)) continue;
 
+        // Find the actual symbol position within the code
+        const symbolIndex = code.indexOf(symbol);
+        if (symbolIndex === -1) continue; // Sanity check
+
+        // Calculate accurate start and end columns
+        const actualStartColumn = Number(colNum) + symbolIndex;
+        const actualEndColumn = actualStartColumn + symbol.length - 1;
+
         results.push({
           symbol,
           file,
           line: Number(lineNum),
           type: search.type,
+          startColumn: actualStartColumn,
+          endColumn: actualEndColumn,
         });
       }
     }
@@ -282,7 +303,14 @@ export async function findSymbols(
   // Remove duplicates (by file:line:symbol), keeping the highest precedence type
   const deduped = new Map<
     string,
-    { symbol: string; file: string; line: number; type: SymbolType }
+    {
+      symbol: string;
+      file: string;
+      line: number;
+      type: SymbolType;
+      startColumn: number;
+      endColumn: number;
+    }
   >();
   for (const item of results) {
     const key = `${item.file}:${item.line}:${item.symbol}`;
