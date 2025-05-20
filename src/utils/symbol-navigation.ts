@@ -3,9 +3,9 @@ import {
   PREVIEW_SCHEME,
   getSymbolPreviewUri,
   PreviewManager,
-} from "./symbolPreview";
-import { getLanguageIdFromFilePath, getFirstIdentifier } from "./symbolSearch";
-import { RecencyTracker } from "./recencyTracker";
+} from "./symbol-preview";
+import { getLanguageIdFromFilePath, getFirstIdentifier } from "./symbol-search";
+import { RecencyTracker } from "./recency-tracker";
 
 // Define a custom type for location items
 export interface LocationQuickPickItem extends vscode.QuickPickItem {

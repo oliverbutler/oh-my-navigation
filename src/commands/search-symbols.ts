@@ -4,14 +4,14 @@ import {
   findSymbols,
   getLanguageIdFromFilePath,
   symbolTypeToIcon,
-} from "../utils/symbolSearch";
+} from "../utils/symbol-search";
 import {
   PREVIEW_SCHEME,
   getSymbolPreviewUri,
   PreviewManager,
-} from "../utils/symbolPreview";
-import { RecencyTracker } from "../utils/recencyTracker";
-import { LastCommandTracker } from "../utils/lastCommandTracker";
+} from "../utils/symbol-preview";
+import { RecencyTracker } from "../utils/recency-tracker";
+import { LastCommandTracker } from "../utils/last-command-tracker";
 
 // Define a custom type for symbol items
 interface SymbolQuickPickItem extends vscode.QuickPickItem {

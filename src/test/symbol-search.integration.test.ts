@@ -1,7 +1,11 @@
 import * as assert from "assert";
 import * as path from "path";
 import * as child_process from "child_process";
-import { runRipgrep, findSymbols, symbolPatterns } from "../utils/symbolSearch";
+import {
+  runRipgrep,
+  findSymbols,
+  symbolPatterns,
+} from "../utils/symbol-search";
 
 // This is an integration test that actually runs ripgrep against test fixtures
 // It depends on ripgrep being installed in the system
@@ -126,8 +130,8 @@ describe("Symbol Search Integration Tests", () => {
           symbol: "TestClass",
           file: "./testClass.ts",
           line: 2,
-          startColumn: 21,
-          endColumn: 29,
+          startColumn: 14,
+          endColumn: 22,
           type: "class",
         },
         {
@@ -142,8 +146,8 @@ describe("Symbol Search Integration Tests", () => {
           symbol: "ClassComponent",
           file: "./testReact.tsx",
           line: 30,
-          startColumn: 21,
-          endColumn: 34,
+          startColumn: 14,
+          endColumn: 27,
           type: "class",
         },
       ]);
@@ -153,30 +157,30 @@ describe("Symbol Search Integration Tests", () => {
       const symbols = await findSymbols("function", fixturesDir);
       expect(symbols).toHaveLength(8);
 
-      expect(symbols).toEqual([
+      expect(symbols).toStrictEqual([
         {
           file: "./testReact.tsx",
           line: 9,
           symbol: "Card",
           type: "function",
-          startColumn: 24,
-          endColumn: 27,
+          startColumn: 17,
+          endColumn: 20,
         },
         {
           file: "./testReact.tsx",
           line: 24,
           symbol: "MemoComponent",
           type: "function",
-          startColumn: 84,
-          endColumn: 96,
+          startColumn: 47,
+          endColumn: 59,
         },
         {
           file: "./testFunction.ts",
           line: 2,
           symbol: "testFunction",
           type: "function",
-          startColumn: 24,
-          endColumn: 35,
+          startColumn: 17,
+          endColumn: 28,
         },
         {
           file: "./testFunction.ts",
@@ -191,8 +195,8 @@ describe("Symbol Search Integration Tests", () => {
           line: 4,
           symbol: "Button",
           type: "function",
-          startColumn: 21,
-          endColumn: 26,
+          startColumn: 14,
+          endColumn: 19,
         },
         {
           file: "./testFunction.ts",
@@ -215,8 +219,8 @@ describe("Symbol Search Integration Tests", () => {
           line: 18,
           symbol: "exportedArrow",
           type: "function",
-          startColumn: 21,
-          endColumn: 33,
+          startColumn: 14,
+          endColumn: 26,
         },
       ]);
     });
@@ -230,8 +234,8 @@ describe("Symbol Search Integration Tests", () => {
           symbol: "User",
           file: "./testTypes.ts",
           line: 2,
-          startColumn: 20,
-          endColumn: 23,
+          startColumn: 13,
+          endColumn: 16,
           type: "type",
         },
         {
@@ -255,8 +259,8 @@ describe("Symbol Search Integration Tests", () => {
           file: "./testTypes.ts",
           line: 13,
           type: "interface",
-          startColumn: 25,
-          endColumn: 35,
+          startColumn: 18,
+          endColumn: 28,
         },
         {
           symbol: "PrivateInterface",

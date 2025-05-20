@@ -38,6 +38,7 @@ export class RecencyTracker {
     const storedEntries = this.context.globalState.get<
       Record<string, RecencyEntry>
     >("omn.recencyEntries", {});
+
     this.entries = new Map(Object.entries(storedEntries));
     this.loaded = true;
   }
@@ -89,6 +90,8 @@ export class RecencyTracker {
   getScore(filePath: string, symbolName?: string): SymbolScore {
     const key = symbolName ? `${filePath}#${symbolName}` : filePath;
     const entry = this.entries.get(key);
+
+    console.log("entry", entry, this.entries);
 
     if (!entry) {
       return { score: 0, lastAccessed: 0, accessCount: 0 };

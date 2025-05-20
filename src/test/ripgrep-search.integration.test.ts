@@ -6,7 +6,7 @@ import {
   runRipgrep,
   searchWithRipgrep,
   RipgrepMatch,
-} from "../utils/ripgrepSearch";
+} from "../utils/ripgrep-search";
 
 describe("RipGrep Search Integration Tests", () => {
   const fixturesDir = path.join(__dirname, "fixtures");

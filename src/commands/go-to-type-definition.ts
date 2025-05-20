@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { RecencyTracker } from "../utils/recencyTracker";
-import { navigateToSymbolLocations } from "../utils/symbolNavigation";
+import { RecencyTracker } from "../utils/recency-tracker";
+import { navigateToSymbolLocations } from "../utils/symbol-navigation";
 
 export function registerGoToTypeDefinitionCommand(
   context: vscode.ExtensionContext,

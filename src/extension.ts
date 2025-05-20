@@ -1,15 +1,15 @@
 import * as vscode from "vscode";
-import { PREVIEW_SCHEME, previewProvider } from "./utils/symbolPreview";
-import { RecencyTracker } from "./utils/recencyTracker";
-import { LastCommandTracker } from "./utils/lastCommandTracker";
-import { registerSearchSymbolsCommand } from "./commands/searchSymbols";
-import { registerSwapToSiblingCommand } from "./commands/swapToSibling";
-import { registerGoToReferencesCommand } from "./commands/goToReferences";
-import { registerGoToDefinitionCommand } from "./commands/goToDefinition";
-import { registerGoToImplementationCommand } from "./commands/goToImplementation";
-import { registerGoToTypeDefinitionCommand } from "./commands/goToTypeDefinition";
-import { registerRipgrepSearchCommand } from "./commands/ripgrepSearch";
-import { registerResumeCommand } from "./commands/resumeCommand";
+import { PREVIEW_SCHEME, previewProvider } from "./utils/symbol-preview";
+import { RecencyTracker } from "./utils/recency-tracker";
+import { LastCommandTracker } from "./utils/last-command-tracker";
+import { registerSearchSymbolsCommand } from "./commands/search-symbols";
+import { registerSwapToSiblingCommand } from "./commands/swap-to-sibling";
+import { registerGoToReferencesCommand } from "./commands/go-to-references";
+import { registerGoToDefinitionCommand } from "./commands/go-to-definition";
+import { registerGoToImplementationCommand } from "./commands/go-to-implementation";
+import { registerGoToTypeDefinitionCommand } from "./commands/go-to-type-definition";
+import { registerRipgrepSearchCommand } from "./commands/ripgrep-search";
+import { registerResumeCommand } from "./commands/resume-command";
 
 let recencyTracker: RecencyTracker;
 let lastCommandTracker: LastCommandTracker;

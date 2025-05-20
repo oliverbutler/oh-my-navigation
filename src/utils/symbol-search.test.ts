@@ -1,4 +1,4 @@
-import { getFirstIdentifier } from "./symbolSearch";
+import { getFirstIdentifier } from "./symbol-search";
 
 describe("Symbol Search", () => {
   describe("extractSymbol", () => {

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { getLanguageIdFromFilePath } from "./symbolSearch";
+import { getLanguageIdFromFilePath } from "./symbol-search";
 
 // Custom scheme for file previews
 export const PREVIEW_SCHEME = "symbol-preview";

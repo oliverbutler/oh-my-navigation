@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PREVIEW_SCHEME, getSymbolPreviewUri } from "../utils/symbolPreview";
-import { getLanguageIdFromFilePath } from "../utils/symbolSearch";
-import { RecencyTracker } from "../utils/recencyTracker";
-import { searchWithRipgrep, RipgrepMatch } from "../utils/ripgrepSearch";
+import { PREVIEW_SCHEME, getSymbolPreviewUri } from "../utils/symbol-preview";
+import { getLanguageIdFromFilePath } from "../utils/symbol-search";
+import { RecencyTracker } from "../utils/recency-tracker";
+import { searchWithRipgrep, RipgrepMatch } from "../utils/ripgrep-search";
 
 // Define a custom type for location items
 interface LocationQuickPickItem extends vscode.QuickPickItem {

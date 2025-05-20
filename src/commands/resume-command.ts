@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LastCommandTracker } from "../utils/lastCommandTracker";
+import { LastCommandTracker } from "../utils/last-command-tracker";
 
 export function registerResumeCommand(
   context: vscode.ExtensionContext,

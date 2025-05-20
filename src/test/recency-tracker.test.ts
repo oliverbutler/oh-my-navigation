@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { RecencyTracker } from "../utils/recencyTracker";
+import { RecencyTracker } from "../utils/recency-tracker";
 
 class MockContext {
   public globalState = {
@@ -103,7 +103,13 @@ describe("RecencyTracker", () => {
       },
     };
 
-    (mockContext.globalState.get as jest.Mock).mockReturnValue(recentMockData);
+    const tracker = new RecencyTracker({
+      globalState: {
+        get: () => recentMockData,
+      },
+    } as any);
+
+    await tracker.load();
 
     const recentScore = tracker.getScore(filePath, symbolName);
 
