@@ -83,11 +83,26 @@ async function navigateToSymbolLocations(
     }
   }
 
+  // Filter out the current position for references
+  const filteredLocations =
+    providerType === "references"
+      ? locations.filter((loc) => {
+          // Skip if it's the same position where the command was triggered
+          if (
+            loc.uri.fsPath === document.uri.fsPath &&
+            loc.range.start.line === position.line
+          ) {
+            return false;
+          }
+          return true;
+        })
+      : locations;
+
   outputChannel.appendLine(
-    `OMN: ${displayName} locations: ${JSON.stringify(locations)}`
+    `OMN: ${displayName} locations: ${JSON.stringify(filteredLocations)}`
   );
 
-  if (locations.length === 0) {
+  if (filteredLocations.length === 0) {
     vscode.window.showInformationMessage(
       `No ${displayName.toLowerCase()} found`
     );
@@ -95,8 +110,8 @@ async function navigateToSymbolLocations(
   }
 
   // If only one location found, navigate directly to it
-  if (locations.length === 1) {
-    await navigateToLocation(locations[0], outputChannel);
+  if (filteredLocations.length === 1) {
+    await navigateToLocation(filteredLocations[0], outputChannel);
     return;
   }
 
@@ -106,7 +121,7 @@ async function navigateToSymbolLocations(
 
   // Create location items for quickpick
   const items: LocationQuickPickItem[] = await Promise.all(
-    locations.map(async (location) => {
+    filteredLocations.map(async (location) => {
       try {
         const uri = location.uri;
         const range = location.range;
