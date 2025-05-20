@@ -4,7 +4,10 @@ import {
   getSymbolPreviewUri,
   PreviewManager,
 } from "../utils/symbolPreview";
-import { getLanguageIdFromFilePath } from "../utils/symbolSearch";
+import {
+  getLanguageIdFromFilePath,
+  getFirstIdentifier,
+} from "../utils/symbolSearch";
 import { RecencyTracker } from "../utils/recencyTracker";
 
 // Define a custom type for location items
@@ -79,6 +82,10 @@ async function navigateToSymbolLocations(
       }
     }
   }
+
+  outputChannel.appendLine(
+    `OMN: ${displayName} locations: ${JSON.stringify(locations)}`
+  );
 
   if (locations.length === 0) {
     vscode.window.showInformationMessage(
@@ -186,7 +193,6 @@ async function navigateToSymbolLocations(
   let fzf = new Fzf(validItems, {
     selector: (item) => `${item.label} ${item.detail} ${item.description}`,
     casing: "smart-case",
-    limit: 50,
   });
 
   let lastSelectedItem: LocationQuickPickItem | undefined;
@@ -260,8 +266,37 @@ async function navigateToSymbolLocations(
           preview: false,
         });
 
-        // Position cursor at the start of the range
-        const position = selected.range.start;
+        // Start with the LSP position
+        let position = selected.range.start;
+
+        // Extract just the portion of the line within the range
+        const lineText = doc.lineAt(position.line).text;
+        const rangeStart = selected.range.start.character;
+        const rangeEnd = Math.min(
+          selected.range.end.character,
+          lineText.length
+        );
+
+        // Only look at the text within the range
+        if (rangeStart < rangeEnd) {
+          const textInRange = lineText.substring(rangeStart, rangeEnd);
+          const identifier = getLanguageIdFromFilePath(selected.uri.fsPath)
+            ? getFirstIdentifier(textInRange)
+            : null;
+
+          if (identifier) {
+            // Find the position of the identifier within the range
+            const identifierIndex = textInRange.indexOf(identifier);
+            if (identifierIndex >= 0) {
+              // Add the range start offset to get the correct position in the full line
+              position = new vscode.Position(
+                position.line,
+                rangeStart + identifierIndex
+              );
+            }
+          }
+        }
+
         const selection = new vscode.Selection(position, position);
         editor.selection = selection;
         editor.revealRange(
@@ -295,7 +330,31 @@ async function navigateToLocation(
     viewColumn: vscode.ViewColumn.Active,
   });
 
-  const position = location.range.start;
+  // Start with the LSP position
+  let position = location.range.start;
+
+  // Extract just the portion of the line within the range
+  const lineText = doc.lineAt(position.line).text;
+  const rangeStart = location.range.start.character;
+
+  const textInRange = lineText.substring(rangeStart);
+
+  const identifier = getLanguageIdFromFilePath(location.uri.fsPath)
+    ? getFirstIdentifier(textInRange)
+    : null;
+
+  if (identifier) {
+    // Find the position of the identifier within the range
+    const identifierIndex = textInRange.indexOf(identifier);
+    if (identifierIndex >= 0) {
+      // Add the range start offset to get the correct position in the full line
+      position = new vscode.Position(
+        position.line,
+        rangeStart + identifierIndex
+      );
+    }
+  }
+
   const selection = new vscode.Selection(position, position);
   editor.selection = selection;
   editor.revealRange(location.range, vscode.TextEditorRevealType.InCenter);

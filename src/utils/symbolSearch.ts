@@ -187,6 +187,32 @@ export function extractSymbol(line: string, regex: RegExp): string | null {
   return null;
 }
 
+export function getFirstIdentifier(line: string): string | null {
+  const keywords = [
+    "async",
+    "const",
+    "let",
+    "var",
+    "function",
+    "class",
+    "type",
+    "interface",
+    "export",
+  ];
+
+  const lineReplaceNonAlphanumeric = line.replace(/[^a-zA-Z0-9_]/g, " ");
+
+  const words = lineReplaceNonAlphanumeric.split(/\s+/).filter(Boolean);
+
+  for (const word of words) {
+    if (!keywords.includes(word)) {
+      return word;
+    }
+  }
+
+  return null;
+}
+
 // Helper to get language ID from file extension
 export function getLanguageIdFromFilePath(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
