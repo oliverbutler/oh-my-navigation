@@ -19,11 +19,17 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install vsce
+        run: pnpm add -g vsce
+
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Build and package extension
-        run: npm run build-install
+        run: pnpm run build-install
 
       - name: Extract latest changelog entry
         id: changelog
