@@ -2,21 +2,21 @@ import * as vscode from "vscode";
 import { RecencyTracker } from "../utils/recencyTracker";
 import { navigateToSymbolLocations } from "../utils/symbolNavigation";
 
-export function registerGoToReferencesCommand(
+export function registerGoToDefinitionCommand(
   context: vscode.ExtensionContext,
   recencyTracker: RecencyTracker,
   outputChannel: vscode.OutputChannel
 ): void {
-  const goToReferences = vscode.commands.registerCommand(
-    "omn.goToReferences",
+  const goToDefinition = vscode.commands.registerCommand(
+    "omn.goToDefinition",
     async () => {
       await navigateToSymbolLocations(
-        "references",
+        "definition",
         outputChannel,
         recencyTracker
       );
     }
   );
 
-  context.subscriptions.push(goToReferences);
+  context.subscriptions.push(goToDefinition);
 }
