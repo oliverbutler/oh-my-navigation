@@ -40,12 +40,14 @@ export const displayNameMap: Record<LocationProviderType, string> = {
 // Navigate to a specific location
 export async function navigateToLocation(
   location: vscode.Location,
-  outputChannel: vscode.OutputChannel
+  outputChannel: vscode.OutputChannel,
+  recencyTracker: RecencyTracker,
+  symbolName: string
 ): Promise<void> {
+  await recencyTracker.recordAccess(location.uri.fsPath, symbolName);
+
+  // First, just open the document without revealing or focusing to avoid adding extra entries to the navigation stack
   const doc = await vscode.workspace.openTextDocument(location.uri);
-  const editor = await vscode.window.showTextDocument(doc, {
-    viewColumn: vscode.ViewColumn.Active,
-  });
 
   // Start with the LSP position
   let position = location.range.start;
@@ -53,27 +55,37 @@ export async function navigateToLocation(
   // Extract just the portion of the line within the range
   const lineText = doc.lineAt(position.line).text;
   const rangeStart = location.range.start.character;
+  const rangeEnd = Math.min(location.range.end.character, lineText.length);
 
-  const textInRange = lineText.substring(rangeStart);
+  // Only look at the text within the range
+  if (rangeStart < rangeEnd) {
+    const textInRange = lineText.substring(rangeStart, rangeEnd);
+    const identifier = getLanguageIdFromFilePath(location.uri.fsPath)
+      ? getFirstIdentifier(textInRange)
+      : null;
 
-  const identifier = getLanguageIdFromFilePath(location.uri.fsPath)
-    ? getFirstIdentifier(textInRange)
-    : null;
-
-  if (identifier) {
-    // Find the position of the identifier within the range
-    const identifierIndex = textInRange.indexOf(identifier);
-    if (identifierIndex >= 0) {
-      // Add the range start offset to get the correct position in the full line
-      position = new vscode.Position(
-        position.line,
-        rangeStart + identifierIndex
-      );
+    if (identifier) {
+      // Find the position of the identifier within the range
+      const identifierIndex = textInRange.indexOf(identifier);
+      if (identifierIndex >= 0) {
+        // Add the range start offset to get the correct position in the full line
+        position = new vscode.Position(
+          position.line,
+          rangeStart + identifierIndex
+        );
+      }
     }
   }
 
-  const selection = new vscode.Selection(position, position);
-  editor.selection = selection;
+  // Now show the document with the correct position already calculated
+  const editor = await vscode.window.showTextDocument(doc, {
+    viewColumn: vscode.ViewColumn.Active,
+    selection: new vscode.Range(position, position),
+    preview: false,
+    preserveFocus: false,
+  });
+
+  // Reveal the range to ensure it's visible
   editor.revealRange(location.range, vscode.TextEditorRevealType.InCenter);
 
   outputChannel.appendLine(
@@ -87,7 +99,7 @@ export async function navigateToLocation(
 export async function navigateToSymbolLocations(
   providerType: LocationProviderType,
   outputChannel: vscode.OutputChannel,
-  recencyTracker?: RecencyTracker
+  recencyTracker: RecencyTracker
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
@@ -154,15 +166,21 @@ export async function navigateToSymbolLocations(
     return;
   }
 
-  // If only one location found, navigate directly to it
-  if (filteredLocations.length === 1) {
-    await navigateToLocation(filteredLocations[0], outputChannel);
-    return;
-  }
-
   // Get the symbol name at the current position
   const wordRange = document.getWordRangeAtPosition(position);
   let symbolName = wordRange ? document.getText(wordRange) : "symbol";
+
+  // If only one location found, navigate directly to it
+  if (filteredLocations.length === 1) {
+    // Use the symbol name we've already extracted for consistency
+    await navigateToLocation(
+      filteredLocations[0],
+      outputChannel,
+      recencyTracker,
+      symbolName
+    );
+    return;
+  }
 
   // Create location items for quickpick
   const items: LocationQuickPickItem[] = await Promise.all(
@@ -311,63 +329,18 @@ export async function navigateToSymbolLocations(
       void (async () => {
         await previewManager.dispose();
 
-        // Track if this item was selected previously (if recency tracker is available)
-        if (recencyTracker) {
-          await recencyTracker.recordAccess(
-            selected.uri.fsPath,
-            selected.label
-          );
-        }
+        // Create a location object from the selected item
+        const location: vscode.Location = {
+          uri: selected.uri,
+          range: selected.range,
+        };
 
-        // Open the document
-        const doc = await vscode.workspace.openTextDocument(selected.uri);
-        const editor = await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.Active,
-          preview: false,
-        });
-
-        // Start with the LSP position
-        let position = selected.range.start;
-
-        // Extract just the portion of the line within the range
-        const lineText = doc.lineAt(position.line).text;
-        const rangeStart = selected.range.start.character;
-        const rangeEnd = Math.min(
-          selected.range.end.character,
-          lineText.length
-        );
-
-        // Only look at the text within the range
-        if (rangeStart < rangeEnd) {
-          const textInRange = lineText.substring(rangeStart, rangeEnd);
-          const identifier = getLanguageIdFromFilePath(selected.uri.fsPath)
-            ? getFirstIdentifier(textInRange)
-            : null;
-
-          if (identifier) {
-            // Find the position of the identifier within the range
-            const identifierIndex = textInRange.indexOf(identifier);
-            if (identifierIndex >= 0) {
-              // Add the range start offset to get the correct position in the full line
-              position = new vscode.Position(
-                position.line,
-                rangeStart + identifierIndex
-              );
-            }
-          }
-        }
-
-        const selection = new vscode.Selection(position, position);
-        editor.selection = selection;
-        editor.revealRange(
-          selected.range,
-          vscode.TextEditorRevealType.InCenter
-        );
-
-        outputChannel.appendLine(
-          `OMN: Navigated to ${selected.uri.fsPath}:${position.line + 1}:${
-            position.character + 1
-          }`
+        // Navigate to the selected location with recency tracking
+        await navigateToLocation(
+          location,
+          outputChannel,
+          recencyTracker,
+          selected.label
         );
       })();
     }

@@ -91,8 +91,6 @@ export class RecencyTracker {
     const key = symbolName ? `${filePath}#${symbolName}` : filePath;
     const entry = this.entries.get(key);
 
-    console.log("entry", entry, this.entries);
-
     if (!entry) {
       return { score: 0, lastAccessed: 0, accessCount: 0 };
     }
