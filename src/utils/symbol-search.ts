@@ -190,6 +190,8 @@ export function extractSymbol(line: string, regex: RegExp): string | null {
 export function getFirstIdentifier(line: string): string | null {
   const keywords = [
     "async",
+    "readonly",
+    "namespace",
     "const",
     "let",
     "var",

@@ -46,52 +46,45 @@ export async function navigateToLocation(
 ): Promise<void> {
   await recencyTracker.recordAccess(location.uri.fsPath, symbolName);
 
-  // First, just open the document without revealing or focusing to avoid adding extra entries to the navigation stack
   const doc = await vscode.workspace.openTextDocument(location.uri);
 
-  // Start with the LSP position
-  let position = location.range.start;
+  const lineZeroIndex = location.range.start.line;
+  let columnZeroIndex = location.range.start.character;
 
-  // Extract just the portion of the line within the range
-  const lineText = doc.lineAt(position.line).text;
-  const rangeStart = location.range.start.character;
-  const rangeEnd = Math.min(location.range.end.character, lineText.length);
+  const lineText = doc.lineAt(lineZeroIndex).text;
+  const lineTextFromColumnZeroIndex = lineText.slice(
+    columnZeroIndex,
+    lineText.length
+  );
 
-  // Only look at the text within the range
-  if (rangeStart < rangeEnd) {
-    const textInRange = lineText.substring(rangeStart, rangeEnd);
-    const identifier = getLanguageIdFromFilePath(location.uri.fsPath)
-      ? getFirstIdentifier(textInRange)
-      : null;
+  const identifier = getFirstIdentifier(lineTextFromColumnZeroIndex);
 
-    if (identifier) {
-      // Find the position of the identifier within the range
-      const identifierIndex = textInRange.indexOf(identifier);
-      if (identifierIndex >= 0) {
-        // Add the range start offset to get the correct position in the full line
-        position = new vscode.Position(
-          position.line,
-          rangeStart + identifierIndex
-        );
-      }
-    }
+  if (identifier) {
+    columnZeroIndex = lineText.indexOf(identifier);
   }
 
-  // Now show the document with the correct position already calculated
+  outputChannel.appendLine(
+    `OMN: navigateToLocation > looking for identifier in text: "${lineTextFromColumnZeroIndex}", found: "${identifier}"`
+  );
+
+  const range = new vscode.Range(
+    lineZeroIndex,
+    columnZeroIndex,
+    lineZeroIndex,
+    columnZeroIndex
+  );
+
   const editor = await vscode.window.showTextDocument(doc, {
     viewColumn: vscode.ViewColumn.Active,
-    selection: new vscode.Range(position, position),
     preview: false,
     preserveFocus: false,
+    selection: range,
   });
 
-  // Reveal the range to ensure it's visible
-  editor.revealRange(location.range, vscode.TextEditorRevealType.InCenter);
+  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
 
   outputChannel.appendLine(
-    `OMN: Navigated to ${location.uri.fsPath}:${position.line + 1}:${
-      position.character + 1
-    }`
+    `OMN: Navigated to ${location.uri.fsPath} range: ${range.start.line} ${range.start.character} ${range.end.line} ${range.end.character}`
   );
 }
 
