@@ -231,7 +231,7 @@ async function searchWithRipgrepCommand(outputChannel: vscode.OutputChannel) {
     }));
 
     outputChannel.appendLine(
-      `Olly: Search results first 4 items: ${JSON.stringify(
+      `OMN: Search results first 4 items: ${JSON.stringify(
         sortedResults.map((r) => r.description).slice(0, 4)
       )}`
     );
