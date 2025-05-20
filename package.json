@@ -62,7 +62,8 @@
     ]
   },
   "scripts": {
-    "build-install": "vsce package --no-dependencies && cursor --install-extension *.vsix --force",
+    "build-install": "pnpm run build && cursor --install-extension *.vsix --force",
+    "build": "vsce package --no-dependencies",
     "vscode:prepublish": "pnpm run package",
     "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
     "watch": "npm-run-all -p watch:*",

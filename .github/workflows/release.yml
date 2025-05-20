@@ -14,6 +14,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Update package.json version to match tag
+        run: |
+          VERSION=$(echo "${GITHUB_REF_NAME}" | sed 's/^v//')
+          jq ".version = \"${VERSION}\"" package.json > package.tmp.json
+          mv package.tmp.json package.json
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -29,7 +35,7 @@ jobs:
         run: pnpm install
 
       - name: Build and package extension
-        run: pnpm run build-install
+        run: pnpm run build
 
       - name: Extract latest changelog entry
         id: changelog
