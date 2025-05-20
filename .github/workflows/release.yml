@@ -47,6 +47,9 @@ jobs:
           cat RELEASE_BODY.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
+      - name: Publish to VS Code Marketplace
+        run: vsce publish -p ${{ secrets.VSCE_PAT }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

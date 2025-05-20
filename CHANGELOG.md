@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5] - 2024-05-20
+
+### Chore
+
+Setup automcated publishing
+
 ## [0.0.4] - 2024-05-20
 
 ### Bugfix
