@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 import { getLanguageIdFromFilePath } from "./symbol-search";
 
 // Custom scheme for file previews
@@ -12,24 +13,39 @@ export class SymbolPreviewContentProvider
   private readonly _onDidChange = new vscode.EventEmitter<vscode.Uri>();
   readonly onDidChange = this._onDidChange.event;
   private fileContents = new Map<string, string>();
+  private outputChannel?: vscode.OutputChannel;
+
+  setOutputChannel(channel: vscode.OutputChannel) {
+    this.outputChannel = channel;
+  }
 
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
-    // Parse URI parameters
+    // Parse URI parameters and decode base64 path
     const params = new URLSearchParams(uri.query);
-    const filePath = params.get("path") || "";
+    const encodedPath = params.get("path64") || "";
+    const filePath = Buffer.from(encodedPath, "base64").toString("utf8");
+
+    this.outputChannel?.appendLine(`OMN: Loading preview for: ${filePath}`);
 
     // Check cache first
     if (this.fileContents.has(filePath)) {
       return this.fileContents.get(filePath) || "";
     }
 
+    // Create a file URI and read the content
+    const fileUri = vscode.Uri.file(filePath);
+
     try {
-      const fs = require("fs");
-      const content = fs.readFileSync(filePath, "utf8");
+      const fileData = await vscode.workspace.fs.readFile(fileUri);
+      const content = new TextDecoder().decode(fileData);
       this.fileContents.set(filePath, content);
       return content;
-    } catch (err) {
-      return `Error loading preview: ${err}`;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.outputChannel?.appendLine(
+        `OMN: Error loading file: ${filePath} - ${errorMessage}`
+      );
+      return `Error loading preview: ${errorMessage}`;
     }
   }
 
@@ -52,10 +68,11 @@ export function getSymbolPreviewUri(
   line: number,
   langId: string
 ): vscode.Uri {
+  // Use base64 encoding to avoid URL encoding issues completely
+  const base64Path = Buffer.from(filePath, "utf8").toString("base64");
+
   return vscode.Uri.parse(
-    `${PREVIEW_SCHEME}:Symbol Preview?path=${encodeURIComponent(
-      filePath
-    )}&line=${line}&language=${langId}`
+    `${PREVIEW_SCHEME}:Symbol Preview?path64=${base64Path}&line=${line}&language=${langId}`
   );
 }
 
@@ -66,7 +83,11 @@ export class PreviewManager {
   private currentDecoration: vscode.TextEditorDecorationType | undefined;
   private initialized = false;
 
-  constructor(private outputChannel?: vscode.OutputChannel) {}
+  constructor(private outputChannel?: vscode.OutputChannel) {
+    if (outputChannel) {
+      previewProvider.setOutputChannel(outputChannel);
+    }
+  }
 
   /**
    * Initialize the preview environment by saving original settings
@@ -109,58 +130,65 @@ export class PreviewManager {
       await this.init();
     }
 
+    this.outputChannel?.appendLine(
+      `OMN: Showing preview for: ${filePath} at line: ${line}`
+    );
+
     const langId = getLanguageIdFromFilePath(filePath);
     const previewUri = getSymbolPreviewUri(filePath, line, langId);
 
-    const doc = await vscode.workspace.openTextDocument(previewUri);
-    await vscode.languages.setTextDocumentLanguage(doc, langId);
+    try {
+      const doc = await vscode.workspace.openTextDocument(previewUri);
+      await vscode.languages.setTextDocumentLanguage(doc, langId);
 
-    this.currentPreviewEditor = await vscode.window.showTextDocument(doc, {
-      viewColumn: vscode.ViewColumn.Active,
-      preview: true,
-      preserveFocus: true,
-    });
+      this.currentPreviewEditor = await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.Active,
+        preview: true,
+        preserveFocus: true,
+      });
 
-    const range = new vscode.Range(
-      line - 1,
-      startColumn - 1,
-      line - 1,
-      startColumn - 1
-    );
-
-    this.currentPreviewEditor.selection = new vscode.Selection(
-      line - 1,
-      startColumn - 1,
-      line - 1,
-      startColumn - 1
-    );
-
-    this.currentPreviewEditor.revealRange(
-      range,
-      vscode.TextEditorRevealType.InCenter
-    );
-
-    // Highlight the line
-    if (this.currentDecoration) {
-      this.currentDecoration.dispose();
-    }
-
-    this.currentDecoration = vscode.window.createTextEditorDecorationType({
-      backgroundColor: new vscode.ThemeColor(
-        "editor.findMatchHighlightBackground"
-      ),
-      isWholeLine: true,
-    });
-
-    this.currentPreviewEditor.setDecorations(this.currentDecoration, [range]);
-
-    if (this.outputChannel) {
-      this.outputChannel.appendLine(
-        `OMN: Shown preview for: ${filePath} at line: ${line} at column: ${startColumn}`
+      const range = new vscode.Range(
+        line - 1,
+        startColumn - 1,
+        line - 1,
+        endColumn ? endColumn - 1 : startColumn
       );
-    }
 
-    return this.currentPreviewEditor;
+      this.currentPreviewEditor.selection = new vscode.Selection(
+        line - 1,
+        startColumn - 1,
+        line - 1,
+        endColumn ? endColumn - 1 : startColumn - 1
+      );
+
+      this.currentPreviewEditor.revealRange(
+        range,
+        vscode.TextEditorRevealType.InCenter
+      );
+
+      // Highlight the line
+      if (this.currentDecoration) {
+        this.currentDecoration.dispose();
+      }
+
+      this.currentDecoration = vscode.window.createTextEditorDecorationType({
+        backgroundColor: new vscode.ThemeColor(
+          "editor.findMatchHighlightBackground"
+        ),
+        isWholeLine: true,
+      });
+
+      this.currentPreviewEditor.setDecorations(this.currentDecoration, [range]);
+
+      return this.currentPreviewEditor;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.outputChannel?.appendLine(
+        `OMN: Error previewing file: ${errorMessage}`
+      );
+      vscode.window.showErrorMessage(`Failed to preview file: ${errorMessage}`);
+      throw err;
+    }
   }
 
   /**
